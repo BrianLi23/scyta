@@ -1,0 +1,10 @@
+venv/
+models/
+llamacpp/
+.DS_Store
+backend/prompts/
+.env
+
+
+# pycache
+__pycache__/
