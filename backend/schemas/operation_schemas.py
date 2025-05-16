@@ -28,7 +28,7 @@ FILEAGENT_SCHEMA = {
     "scan": {
         "description": "Scan a directory/file and return a list of file paths and metadata of all files/folders",
         "parameters": {
-            "file_path": {
+            "source_path": {
                 "type": "string", 
                 "required": True, 
                 "description": "Directory (or file) path to scan"
@@ -41,7 +41,7 @@ FILEAGENT_SCHEMA = {
     "delete": {
         "description": "Delete a file or directory",
         "parameters": {
-            "file_path": {
+            "source_path": {
                 "type": "Union[str, List[str]]", 
                 "required": True, 
                 "description": "Path of file/folder to delete"
@@ -108,7 +108,7 @@ FILEAGENT_SCHEMA = {
     "create_file": {
         "description": "Create a new file with specified content",
         "parameters": {
-            "file_path": {
+            "source_path": {
                 "type": "string", 
                 "required": True, 
                 "description": "Path for the new file"
@@ -126,7 +126,7 @@ FILEAGENT_SCHEMA = {
     "create_dir": {
         "description": "Create a new directory",
         "parameters": {
-            "file_path": {
+            "source_path": {
                 "type": "string", 
                 "required": True, 
                 "description": "Path for the new directory"

@@ -59,17 +59,26 @@ class FileAgent(BaseAgent):
             # Expand and resolve the path
             path = Path(path).expanduser().resolve()
             
-            # Check if path exists
+            # For new paths that don't exist yet, check the parent directory
             if not path.exists():
-                return False
+                # Check if parent directory exists and has write permission
+                parent_path = path.parent
+                if not parent_path.exists():
+                    return False
                 
-            # Find the base allowed directory that contains this path
+                # Check if parent directory is within allowed directories
+                for allowed_dir, permissions in self.allowed_directories.items():
+                    allowed_path = Path(allowed_dir).expanduser().resolve()
+                    if allowed_path in parent_path.parents or parent_path == allowed_path:
+                        return permissions.get("write", False)
+                return False
+            
+            # For existing paths, check the path itself
             for allowed_dir, permissions in self.allowed_directories.items():
                 allowed_path = Path(allowed_dir).expanduser().resolve()
-                
-                if path in allowed_path.parents and path == allowed_path:
+                if allowed_path in path.parents or path == allowed_path:
                     return permissions.get(operation, False)
-                
+            
             return False
                 
         except Exception:
@@ -161,17 +170,18 @@ class FileAgent(BaseAgent):
             
                 if operation_type not in self.fileagent_operations:
                     return {"error": "Invalid operation"}
-                    
+                print("Operation intermediate results: ", operation_intermediate_results)
                 # Execute the operation
                 # Means its requires output will come from previous operation
                 if any(value == "<populated_after_execution>" for value in kwargs.values()):
+                    
                     last_result = operation_intermediate_results[-1]
                     # If not populated, keep the value as it is
                     kwargs = {k: last_result.get(k) if kwargs[k] == "<populated_after_execution>" else kwargs[k] for k in kwargs}
                 
                 print("Executing operation: ", operation_type)
                 returnval = self.fileagent_operations[operation_type]["function"](**kwargs)
-                
+
                 # Append the result to the list of results
                 operation_results.append(returnval)
                 
@@ -279,12 +289,12 @@ class FileAgent(BaseAgent):
         except Exception as e:
             return {"error": str(e)}
         
-    def _get_metadata_single(self, file_path: str) -> Dict:
+    def _get_metadata_single(self, source_path: str) -> Dict:
         """
         Get metadata of a file/folder given pathname
         """
         try:
-            file_path = Path(file_path).expanduser()
+            file_path = Path(source_path).expanduser()
             # If file path is in cache, return it
             if str(file_path) in self.metadata_cache:
                 return self.metadata_cache[str(file_path)]
@@ -349,17 +359,17 @@ class FileAgent(BaseAgent):
             size /= 1024
         return f"{size:.1f}PB"
         
-    def _scan_operation(self, file_path: Optional[str] = None) -> List[Dict]:
+    def _scan_operation(self, source_path: Optional[str] = None) -> List[Dict]:
         """
         Scan specified directory/file and return metadata (Mainly used for directory)
         """
         # Assume LLM doesn't know what the user path is so we'll expand it for them
         try:
-            expanded_path = Path(file_path).expanduser()
+            expanded_path = Path(source_path).expanduser()
             
             # Check permissions
             if not self._validate_operation("scan", expanded_path):
-                return {"error": f"Permission denied: No read access to {file_path}"}
+                return {"error": f"Permission denied: No read access to {source_path}"}
                 
             results = {
                 "type": "",
@@ -465,46 +475,46 @@ class FileAgent(BaseAgent):
                 return False
             print("Please answer 'yes' or 'no'")
 
-    def _format_file_list(self, files: List[str]) -> str:
+    def _format_file_list(self, source_path: List[str]) -> str:
         """
         Format a list of files for better readability
         """
-        if not files:
+        if not source_path:
             return "No files found"
             
         formatted = "\nFiles:\n"
-        for i, file in enumerate(files, 1):
+        for i, file in enumerate(source_path, 1):
             formatted += f"{i}. {file}\n"
         return formatted
 
-    def _delete_file(self, file_path: Union[str, List[str]]) -> Dict:
+    def _delete_file(self, source_path: Union[str, List[str]]) -> Dict:
         try:
             # Check permissions for delete operation
-            if isinstance(file_path, list):
-                for path in file_path:
+            if isinstance(source_path, list):
+                for path in source_path:
                     if not self._validate_operation("delete", path):
                         return {"error": f"Permission denied: No delete access to {path}"}
             else:
-                if not self._validate_operation("delete", file_path):
-                    return {"error": f"Permission denied: No delete access to {file_path}"}
+                if not self._validate_operation("delete", source_path):
+                    return {"error": f"Permission denied: No delete access to {source_path}"}
                     
             trash_path = Path.home() / ".Trash"
             results = []
             
-            if isinstance(file_path, list):
-                if not self._confirm_operation("delete", file_path):
+            if isinstance(source_path, list):
+                if not self._confirm_operation("delete", source_path):
                     return {"message": "Operation cancelled by user"}
                     
-                for path in file_path:
+                for path in source_path:
                     path = Path(path).expanduser()
                     if not path.exists():
                         results.append({"file": str(path), "error": "File does not exist"})
                         continue
                     shutil.move(path, trash_path / path.name)
                     results.append({"file": str(path), "message": "File moved to trash successfully"})
-                return {"results": results, "formatted_output": self._format_file_list(file_path)}
+                return {"results": results, "formatted_output": self._format_file_list(source_path)}
             else:
-                path = Path(file_path).expanduser()
+                path = Path(source_path).expanduser()
                 if not path.exists():
                     return {"error": "File does not exist"}
                 if not self._confirm_operation("delete", [str(path)]):
@@ -678,13 +688,13 @@ class FileAgent(BaseAgent):
         except Exception as e:
             return {"error": str(e)}
         
-    def _create_file(self, file_path: str, content: str) -> Dict:
+    def _create_file(self, source_path: str, content: str) -> Dict:
         try:
             # Check permissions for create operation
-            if not self._validate_operation("create_file", file_path):
-                return {"error": f"Permission denied: No write access to {file_path}"}
+            if not self._validate_operation("create_file", source_path):
+                return {"error": f"Permission denied: No write access to {source_path}"}
                 
-            file_path = Path(file_path).expanduser()
+            file_path = Path(source_path).expanduser()
             
             with open(file_path, "w") as file:
                 file.write(content)
@@ -693,16 +703,16 @@ class FileAgent(BaseAgent):
         except Exception as e:
             return {"error": str(e)}
         
-    def _create_dir(self, file_path: str) -> Dict:
+    def _create_dir(self, source_path: str) -> Dict:
         """
         Create a directory given its path
         """
         try:
             # Check permissions for create operation
-            if not self._validate_operation("create_dir", file_path):
-                return {"error": f"Permission denied: No write access to {file_path}"}
+            if not self._validate_operation("create_dir", source_path):
+                return {"error": f"Permission denied: No write access to {source_path}"}
                 
-            true_path = Path(file_path).expanduser()
+            true_path = Path(source_path).expanduser()
             
             true_path.mkdir(parents=True, exist_ok=True)
             return {"message": "Directory created successfully"}
@@ -745,7 +755,7 @@ class FileAgent(BaseAgent):
                 
             # For now, we can just utilize the mv function, when we reach edges cases we can use osascript
             elif op_type == "delete":
-                file_path = clean_path(Path(operation["parameters"]["file_path"]))
+                file_path = clean_path(Path(operation["parameters"]["source_path"]))
                 trash_path = Path.home() / ".Trash"
                 trash_file = trash_path / file_path.name    
                 
@@ -758,7 +768,7 @@ class FileAgent(BaseAgent):
             elif op_type == "create_file":
                 # Simply delete the created file
                 trash_path = Path.home() / ".Trash"
-                file_path = clean_path(Path(operation["parameters"]["file_path"]))
+                file_path = clean_path(Path(operation["parameters"]["source_path"]))
                 shutil.move(file_path, trash_path / file_path.name)
                 
             elif op_type == "create_dir":
@@ -825,11 +835,11 @@ class FileAgent(BaseAgent):
         except Exception as e:
             return [{"error": str(e)}]
         
-    def _get_file_hash(self, file_path):
+    def _get_file_hash(self, source_path):
         """Return the SHA-256 hash of the file at the given path."""
         sha256_hash = hashlib.sha256()
         # Open file in binary mode
-        with open(file_path, "rb") as f:
+        with open(source_path, "rb") as f:
             # Read and update hash in chunks (to handle large files efficiently)
             for chunk in iter(lambda: f.read(4096), b""):
                 sha256_hash.update(chunk)
