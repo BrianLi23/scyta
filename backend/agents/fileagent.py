@@ -196,7 +196,7 @@ class FileAgent(BaseAgent):
         except Exception as e:
             return {"error": str(e)}
             
-    def _batch_process(self, returnval: List[Dict], next_operation, post_processing, batch_size=6) -> Dict:
+    def _batch_process(self, returnval: List[Dict], next_operation, post_processing, batch_size=10) -> Dict:
         """
         Process batches using ThreadPoolExecutor
         """
@@ -557,27 +557,34 @@ class FileAgent(BaseAgent):
         
     def _extract_json(self, text):
         try:
-            
-            # Attempt to parse JSON between ```json specifcally
-            json_match = re.search(r"```json\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                return json.loads(json_str)
-        
-            # Attempt to parse JSON between ``` and ```
-            json_match = re.search(r"```\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                return json.loads(json_str)
+            # Try parsing JSON from code blocks first
+            for pattern in [r"```json\s*\n?(.*?)\n?\s*```", r"```\s*\n?(.*?)\n?\s*```"]:
+                match = re.search(pattern, text, re.DOTALL)
+                if match:
+                    return json.loads(match.group(1))
 
-            # Attempt to parse JSON between brackets
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                return json.loads(json_str)
-            
-            if not json_match:
+            # Try parsing JSON between brackets
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if not match:
                 raise ValueError("No JSON found")
+                
+            json_str = match.group().strip()
+            
+            # Add missing closing brace if needed
+            if json_str.count('{') > json_str.count('}'):
+                json_str += '}'
+                
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                # Clean up common JSON formatting issues
+                # Remove trailing commas before closing braces/brackets
+                json_str = re.sub(r',\s*[}\]]', r'\1', json_str)
+                # Add missing commas between fields
+                json_str = re.sub(r'"\s*}\s*"', '", "', json_str)
+                json_str = re.sub(r'"\s*}\s*}', '"}', json_str)
+                return json.loads(json_str)
+                
         except Exception as e:
             return {"error": str(e)}
     
@@ -894,6 +901,7 @@ class FileAgent(BaseAgent):
             return {"error": f"Failed to change directory to {directory}"}
         except Exception as e:
             return {"error": str(e)}
+        
 if __name__ == "__main__":
     agent = FileAgent(name="File Agent", description="Handles file operations")
     while True:

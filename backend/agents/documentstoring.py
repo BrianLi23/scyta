@@ -24,27 +24,27 @@ class DocumentStore:
         self.chunker = rc.SemanticChunker(self.chunk_size, self.overlap) # Chunker for the documents
         self.file_agent = FileAgent(name="FileAgent", description="Agent for file operations")
         
-        # Load FIASS index
+        # Load FAISS index
         self.index_dimension = self.embedding_model.get_sentence_embedding_dimension()
-        self.index = faiss.IndexFlatL2(self.index_dimension)
+        
+        # Load existing state if available
+        self.indexed_files = self._load_indexed_files() # This is the metadata of the documents
+        self.vector_index = self._load_index(self.vector_index_path) # This is the FAISS index
+        
+        if self.vector_index is not None:
+            self.vector_index = self.vector_index
         
         self.vector_index_path = 'vector_index' # Path in disk to store the index
         self.indexed_files_path = 'document_store.db'
-          
-        self.indexed_files = self._load_indexed_files()
-        self.vector_index = self._load_index()
-    
-        # Storage for documents and metadata
+        
+        # Initialize storage for documents and metadata
         self.documents = []
         self.document_lookup = {}
-        
-    def _index_folder(self, file_path: str):
-        """Index all documents in a folder"""
-        self._index_documents([file_path])
         
     def _index_documents(self, paths: List[str]) -> Dict:
         """Index new documents with given paths"""
         try:
+            self._log_document_store_state("indexing")
             indexed_count = 0
             for path in paths:
                 # Use FileAgent's _get_metadata_single directly
@@ -64,9 +64,9 @@ class DocumentStore:
                 chunks, embeddings = self._process_document(path)
                 
                 # Add to FAISS index
-                start_idex = self.index.ntotal
-                self.index.add(embeddings)
-                end_index = self.index.ntotal
+                start_idex = self.vector_index.ntotal
+                self.vector_index.add(embeddings)
+                end_index = self.vector_index.ntotal
                 
                 # Map the new indexes to a document id
                 for i, idx in enumerate(range(start_idex, end_index)):
@@ -84,6 +84,7 @@ class DocumentStore:
                 })
                 indexed_count += 1
 
+            self._log_document_store_state("after indexing")
             return {"message": f"Successfully indexed {indexed_count} documents"}
             
         except Exception as e:
@@ -162,8 +163,9 @@ class DocumentStore:
     def _save_state(self) -> Dict:
         """Save the current state of the document store to disk"""
         try:
+            self._log_document_store_state("saving")
             # Save FAISS index
-            faiss.write_index(self.index, self.vector_index_path)
+            faiss.write_index(self.vector_index, self.vector_index_path)
             logger.info(f"Saved FAISS index to {self.vector_index_path}")
             
             # Save metadata to SQLite database
@@ -206,10 +208,11 @@ class DocumentStore:
     def _load_state(self) -> Dict:
         """Load the complete state of the document store from disk"""
         try:
+            self._log_document_store_state("loading")
             # Load FAISS index
             loaded_index = self._load_index(self.vector_index_path)
             if loaded_index is not None:
-                self.index = loaded_index
+                self.vector_index = loaded_index
                 logger.info("Successfully loaded FAISS index")
             
             # Load documents and lookup
@@ -217,6 +220,7 @@ class DocumentStore:
             if "error" in result:
                 return result
                 
+            self._log_document_store_state("after loading")
             return {"message": "Successfully loaded state"}
             
         except Exception as e:
@@ -238,8 +242,8 @@ class DocumentStore:
                 query_embedding = query_embedding.reshape(1, -1)
                 
             # Perform similarity search
-            logger.info(f"Index size: {self.index.ntotal}")
-            distances, indices = self.index.search(query_embedding, top_k) 
+            logger.info(f"Index size: {self.vector_index.ntotal}")
+            distances, indices = self.vector_index.search(query_embedding, top_k) 
             logger.debug(f"Distances: {distances}")
             logger.debug(f"Indices: {indices}")
             
@@ -336,6 +340,18 @@ class DocumentStore:
             logger.error(f"Error viewing document store: {str(e)}")
             return {"error": str(e)}
         
+    def _log_document_store_state(self, operation: str):
+        """Log the current state of the document store"""
+        logger.info(f"\n=== Document Store State before {operation} ===")
+        logger.info(f"Number of documents: {len(self.documents)}")
+        logger.info(f"FAISS index size: {self.vector_index.ntotal}")
+        logger.info(f"Document lookup entries: {len(self.document_lookup)}")
+        if self.documents:
+            logger.info("Documents in store:")
+            for doc in self.documents:
+                logger.info(f"- {doc['doc_id']}: {doc['path']}")
+        logger.info("================================\n")
+
 def serialize_datetime(obj):
     """Helper function to serialize datetime objects to JSON"""
     if isinstance(obj, datetime):

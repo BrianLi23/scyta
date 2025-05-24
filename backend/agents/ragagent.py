@@ -29,9 +29,6 @@ class RAGAgent(BaseAgent):
         self.document_store = DocumentStore()
         self.file_agent = FileAgent(name="FileAgent", description="Agent for file operations")
         
-        # Initialize RAG tools
-        # self.tools = RAGAgentTools()
-        
         # Define operation schemas
         self.ragagent_operations = copy.deepcopy(RAGAGENT_SCHEMA)
         for operation, details in self.ragagent_operations.items():
@@ -39,6 +36,7 @@ class RAGAgent(BaseAgent):
             if isinstance(function_name, str):
                 self.ragagent_operations[operation]["function"] = getattr(self, function_name)
         
+    # No need to test this function for now
     def _router(self, query):
         """Routes the query to the appropriate tool based on the command."""
         router_examples = ROUTER_EXAMPLES
@@ -55,6 +53,7 @@ class RAGAgent(BaseAgent):
         
         return router_json_response
     
+    # Same with the _router function, no need to test this function for now
     def _operations(self, json: dict, **kwargs) -> Dict:
         """
         Perform and handle execution of RAG operations.
@@ -83,8 +82,8 @@ class RAGAgent(BaseAgent):
         except Exception as e:
             return {"error": str(e)}
             
+        
     def _index_documents(self, documents):
-        """Index new documents with given paths"""
         try:
             indexed_count = 0
             for path in documents:
@@ -154,7 +153,7 @@ class RAGAgent(BaseAgent):
     def _search_reasoning(self, query: str, k: int = 5) -> Dict:
         try:
             # Perform search on document store
-            requery_count = 5 # Maximum number of requery attempts
+            requery_count = 3 # Maximum number of requery attempts
             requery_attempts = 0
             query_history = []
             all_paths = []
@@ -182,7 +181,10 @@ class RAGAgent(BaseAgent):
                 )
                 
                 reasoning_response = reasoning_response.choices[0].message.content
+                print(reasoning_response)
                 reasoning_json_response = self.file_agent._extract_json(reasoning_response)
+                print(reasoning_json_response)
+                
                 reasoning_json_response["Response"]["file_path"] = context["document"]["path"]
                 
                 # Check if a requery is needed
@@ -214,12 +216,11 @@ if __name__ == "__main__":
     # Example usage
     agent = RAGAgent(name="RAG Agent", description="This agent utilizes the RAG framework for question answering")
     
-    # Example 1: Index documents
-    test_file = "./test.txt"
-    with open(test_file, "w") as f:
-        f.write("This is a test document about artificial intelligence.")
+    # # Example 1: Index documents
+    # with open(test_file, "w") as f:
+    #     f.write("This is a test document about artificial intelligence.")
     
-    result = agent._index_documents([test_file])
+    result = agent._index_documents(["index_test/test.txt", "index_test/test2.txt", "index_test/test3.txt"])
     print("Index result:", result)
     
     # Example 2: Search and reason
@@ -233,6 +234,3 @@ if __name__ == "__main__":
     
     load_result = agent._load_state()
     print("Load state result:", load_result)
-    
-    # Clean up
-    os.remove(test_file)
