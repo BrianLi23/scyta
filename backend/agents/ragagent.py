@@ -1,14 +1,6 @@
 from typing import List, Dict, Optional
-import os
-from pathlib import Path
-import json
-from datetime import datetime
-import faiss
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from backend.mainframe import BaseAgent, Tool
+from backend.mainframe import BaseAgent
 from backend.agents.fileagent import FileAgent
-import backend.agents.ragchunking as rc
 from backend.agents.documentstoring import DocumentStore
 from backend.schemas.operation_schemas import RAGAGENT_SCHEMA
 from backend.prompts.ragagent_prompt import PROMPT_ROUTER, ROUTER_EXAMPLES, FEW_SHOT_EXAMPLES, PROMPT_REASONING
@@ -36,7 +28,6 @@ class RAGAgent(BaseAgent):
             if isinstance(function_name, str):
                 self.ragagent_operations[operation]["function"] = getattr(self, function_name)
         
-    # No need to test this function for now
     def _router(self, query):
         """Routes the query to the appropriate tool based on the command."""
         router_examples = ROUTER_EXAMPLES
@@ -53,7 +44,6 @@ class RAGAgent(BaseAgent):
         
         return router_json_response
     
-    # Same with the _router function, no need to test this function for now
     def _operations(self, json: dict, **kwargs) -> Dict:
         """
         Perform and handle execution of RAG operations.
@@ -82,75 +72,104 @@ class RAGAgent(BaseAgent):
         except Exception as e:
             return {"error": str(e)}
             
-        
     def _index_documents(self, documents):
+        """Wrapper for DocumentStore's document indexing functionality"""
         try:
-            indexed_count = 0
-            for path in documents:
-                # Use FileAgent's _get_metadata_single for comprehensive metadata
-                metadata = self.file_agent._get_metadata_single(path)
-                if "error" in metadata:
-                    logger.error(f"Error getting metadata for {path}: {metadata['error']}")
-                    continue
-
-                doc_id = metadata["file_hash"]
-                
-                # Skip if already indexed
-                if doc_id in {doc["doc_id"] for doc in self.document_store.documents}:
-                    logger.info(f"Document {doc_id} already indexed, skipping")
-                    continue
-                
-                # Process document
-                chunks, embeddings = self.document_store._process_document(path)
-                
-                # Add to FAISS index
-                start_idex = self.document_store.index.ntotal
-                self.document_store.index.add(embeddings)
-                end_index = self.document_store.index.ntotal
-                
-                # Map the new indexes to a document id
-                for i, idx in enumerate(range(start_idex, end_index)):
-                    self.document_store.document_lookup[idx] = {
-                        "doc_id": doc_id,
-                        "chunk_index": i
-                    }
-                
-                # Store document info
-                self.document_store.documents.append({
-                    "doc_id": doc_id,
-                    "path": path,
-                    "metadata": metadata,
-                    "chunks": chunks
-                })
-                indexed_count += 1
-
-            return {"message": f"Successfully indexed {indexed_count} documents"}
-            
+            return self.document_store._index_documents(documents)
         except Exception as e:
             logger.error(f"Error indexing documents: {str(e)}")
             return {"error": str(e)}
     
     def _update_document(self, doc_id, path):
+        """Wrapper for DocumentStore's document update functionality"""
         return self.document_store._update_document(doc_id, path)
     
     def _save_state(self):
+        """Wrapper for DocumentStore's state saving functionality"""
         try:
-            self.document_store._save_state()
-            return {"message": "State saved"}
+            return self.document_store._save_state()
         except Exception as e:
             return {"error": str(e)}
     
     def _load_state(self):   
+        """Wrapper for DocumentStore's state loading functionality"""
         try:
-            self.document_store._load_state()
-            return {"message": "State loaded"}
+            return self.document_store._load_state()
         except Exception as e:
             return {"error": str(e)}
         
     def _view_document_store(self):
-        return self.document_store._view_document_store()
+        """Wrapper for DocumentStore's view functionality with enhanced formatting and table display"""
+        try:
+            store_info = self.document_store._view_document_store()
+            
+            if "error" in store_info:
+                return store_info
+                
+            # Format the response
+            formatted_response = {
+                "store_summary": {
+                    "total_documents": store_info["document_count"],
+                    "total_lookup_entries": store_info["lookup_entries"],
+                    "tables": store_info["tables"]
+                },
+                "documents": []
+            }
+            
+            # Print store summary
+            print("\n=== Document Store Summary ===")
+            print(f"Total Documents: {store_info['document_count']}")
+            print(f"Total Lookup Entries: {store_info['lookup_entries']}")
+            print(f"Tables: {', '.join(store_info['tables'])}")
+            print("============================\n")
+            
+            # Format and print each document's information
+            for doc in store_info["documents"]:
+                print(f"\n=== Document: {doc['doc_id']} ===")
+                print(f"Path: {doc['path']}")
+                print("\nMetadata:")
+                print(f"  File Type: {doc['metadata'].get('file_type', 'unknown')}")
+                print(f"  File Size: {doc['metadata'].get('file_size', 'unknown')}")
+                print(f"  Last Modified: {doc['metadata'].get('last_modified', 'unknown')}")
+                print(f"  File Hash: {doc['metadata'].get('file_hash', 'unknown')}")
+                
+                print("\nChunks:")
+                print("┌────────────┬────────────────────────────────────────────────────────────┐")
+                print("│ Chunk #    │ Content                                                    │")
+                print("├────────────┼────────────────────────────────────────────────────────────┤")
+                
+                # Get chunks from the correct field
+                chunks = doc.get('first_chunks', [])
+                for i, chunk in enumerate(chunks, 1):
+                    # Truncate chunk content if too long
+                    chunk_preview = chunk[:60] + "..." if len(chunk) > 60 else chunk
+                    print(f"│ {i:<10} │ {chunk_preview:<60} │")
+                
+                print("└────────────┴────────────────────────────────────────────────────────────┘")
+                print("\n" + "="*80 + "\n")
+                
+                # Store in formatted response
+                formatted_doc = {
+                    "doc_id": doc["doc_id"],
+                    "path": doc["path"],
+                    "metadata": {
+                        "file_type": doc["metadata"].get("file_type", "unknown"),
+                        "file_size": doc["metadata"].get("file_size", "unknown"),
+                        "last_modified": doc["metadata"].get("last_modified", "unknown"),
+                        "file_hash": doc["metadata"].get("file_hash", "unknown")
+                    },
+                    "chunks": chunks  # Store the chunks we retrieved
+                }
+                formatted_response["documents"].append(formatted_doc)
+            
+            return formatted_response
+            
+        except Exception as e:
+            logger.error(f"Error formatting document store view: {str(e)}")
+            return {"error": str(e)}
         
     def _search_reasoning(self, query: str, k: int = 5) -> Dict:
+        """Enhanced search with reasoning capabilities"""
         try:
             # Perform search on document store
             requery_count = 3 # Maximum number of requery attempts
@@ -216,17 +235,17 @@ if __name__ == "__main__":
     # Example usage
     agent = RAGAgent(name="RAG Agent", description="This agent utilizes the RAG framework for question answering")
     
-    # # Example 1: Index documents
-    # with open(test_file, "w") as f:
-    #     f.write("This is a test document about artificial intelligence.")
-    
     result = agent._index_documents(["index_test/test.txt", "index_test/test2.txt", "index_test/test3.txt"])
     print("Index result:", result)
     
     # Example 2: Search and reason
-    query = "What is artificial intelligence?"
+    query = "What is the capital of France?"
     result = agent._search_reasoning(query)
     print("\nSearch result:", result)
+    
+    # Example 2.1: View document store
+    view_result = agent._view_document_store()
+    print("\nView document store result:", view_result)
     
     # Example 3: Save and load state
     save_result = agent._save_state()

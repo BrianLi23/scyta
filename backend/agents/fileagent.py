@@ -102,32 +102,29 @@ class FileAgent(BaseAgent):
         # Get recent conversation context
         recent_context = chat_history.get_recent_conversations(limit=3)
         
-        prompt_planning = PROMPT_PLANNING.format(
-            recent_context=recent_context,
-            instruction=instruction,
-            fileagent_operations=self.fileagent_operations,
-            planning_examples=PLANNING_EXAMPLES,
-            current_directory=self.get_current_directory()
-        )
+        # prompt_planning = PROMPT_PLANNING.format(
+        #     recent_context=recent_context,
+        #     instruction=instruction,
+        #     fileagent_operations=self.fileagent_operations,
+        #     planning_examples=PLANNING_EXAMPLES,
+        #     current_directory=self.get_current_directory()
+        # )
         
-        plan_output = self.llm.chat.completions.create(
-            messages=[
-                {"role": "user", "content": prompt_planning}
-            ],
-            model="llama3-8b-8192",
-            temperature=0.2,
-            max_tokens=4000,
-        )
-        plan_response = plan_output.choices[0].message.content
-        print(plan_response)
-        planning_json_response = self._extract_json(plan_response)
-        
-        # Stores the query and response in memory
-        # self.memory.append({"Problem": query, "Response": llm_response["choices"][0]["text"]})
+        # plan_output = self.llm.chat.completions.create(
+        #     messages=[
+        #         {"role": "user", "content": prompt_planning}
+        #     ],
+        #     model="llama-3.1-8b-instant",
+        #     temperature=0.2,
+        #     max_tokens=4000,
+        # )
+        # plan_response = plan_output.choices[0].message.content
+        # # print(plan_response)
+        # planning_json_response = self._extract_json(plan_response)
         
         prompt_operation = PROMPT_OPERATION.format(
             fileagent_operations=self.fileagent_operations,
-            planning_json_response=planning_json_response,
+            # planning_json_response=planning_json_response,
             instruction=instruction,
             operation_examples=OPERATION_EXAMPLES,
             current_directory=self.get_current_directory()
@@ -137,12 +134,11 @@ class FileAgent(BaseAgent):
             messages=[
                 {"role": "user", "content": prompt_operation}
             ],
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             temperature=0.2,
             max_tokens=4000,
         )
         operation_response = operation_output.choices[0].message.content
-        print(operation_response)
         operation_json_response = self._extract_json(operation_response)
         chat_history.add_operation(operation_json_response)
         chat_history.add_conversation(instruction, operation_json_response, planning_json_response)
@@ -171,13 +167,27 @@ class FileAgent(BaseAgent):
                 if operation_type not in self.fileagent_operations:
                     return {"error": "Invalid operation"}
                 print("Operation intermediate results: ", operation_intermediate_results)
+                
                 # Execute the operation
-                # Means its requires output will come from previous operation
+                # Check if any parameter needs to be populated from previous operation results
                 if any(value == "<populated_after_execution>" for value in kwargs.values()):
-                    
+                    # Get the results from the most recent operation
                     last_result = operation_intermediate_results[-1]
-                    # If not populated, keep the value as it is
-                    kwargs = {k: last_result.get(k) if kwargs[k] == "<populated_after_execution>" else kwargs[k] for k in kwargs}
+                    
+                    # Replace placeholder values with actual data from previous operation
+                    # For each parameter in kwargs:
+                    # - If value is "<populated_after_execution>", replace with data from last_result
+                    # - Otherwise, keep the original value unchanged
+                    updated_kwargs = {}
+                    for param_name, param_value in kwargs.items():
+                        if param_value == "<populated_after_execution>":
+                            # Try to get the corresponding value from previous operation result
+                            updated_kwargs[param_name] = last_result.get(param_name, param_value)
+                        else:
+                            # Keep original value if not a placeholder
+                            updated_kwargs[param_name] = param_value
+                    
+                    kwargs = updated_kwargs
                 
                 print("Executing operation: ", operation_type)
                 returnval = self.fileagent_operations[operation_type]["function"](**kwargs)
@@ -190,7 +200,7 @@ class FileAgent(BaseAgent):
                     batch_size = 6
                     operation_intermediate_results.append(self._batch_process(returnval, next_operation, post_processing, batch_size))
                     
-            print("Operation results: ", operation_results)
+            # print("Operation results: ", operation_results)
             return operation_results
         
         except Exception as e:
@@ -275,7 +285,7 @@ class FileAgent(BaseAgent):
                 messages=[
                     {"role": "user", "content": post_processing_prompt}
                 ],
-                model="llama3-8b-8192",
+                model="llama-3.1-8b-instant",
                 temperature=0.1,
                 max_tokens=4000,
             )
@@ -352,7 +362,6 @@ class FileAgent(BaseAgent):
             return {"error": str(e)}
     
     def _format_size(self, size: int) -> str:
-        """Format file size in human readable format"""
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
             if size < 1024:
                 return f"{size:.1f}{unit}"
@@ -468,6 +477,13 @@ class FileAgent(BaseAgent):
             print(f"{i}. {file}")
             
         while True:
+            if operation_type == "move":
+                operation_type = "mov"
+            elif operation_type == "delete":
+                operation_type = "delet"
+            elif operation_type == "rename":
+                operation_type = "renam"
+                
             response = input(f"\nDo you want to proceed with {operation_type}ing these files? (yes/no): ").lower()
             if response in ['yes', 'y']:
                 return True

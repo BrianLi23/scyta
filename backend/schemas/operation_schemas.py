@@ -164,39 +164,39 @@ FILEAGENT_SCHEMA = {
 }
 
 RAGAGENT_SCHEMA = {
-    "index": {
-        "description": "Index new documents",
+    "index_documents": {
+        "description": "Index new documents into the document store",
         "parameters": {
             "documents": {
-                "type": "List", 
+                "type": "List[str]", 
                 "required": True, 
-                "description": "List of documents to index"
+                "description": "List of document paths to index"
             }
         },
         "process_output": True,
         "function": "_index_documents"
     },
 
-    "search": {
-        "description": "Search indexed documents",
+    "search_documents": {
+        "description": "Search indexed documents with reasoning capabilities",
         "parameters": {
             "query": {
                 "type": "string", 
                 "required": True, 
-                "description": "Search query"
+                "description": "Search query to find relevant documents"
             },
             "k": {
                 "type": "integer", 
                 "required": False, 
-                "description": "Number of documents to return (default: 5)"
+                "description": "Number of top results to return (default: 5)"
             }
         },
         "process_output": True,
         "function": "_search_reasoning"
     },
 
-    "update": {
-        "description": "Update existing documents",
+    "update_document": {
+        "description": "Update an existing document in the store",
         "parameters": {
             "doc_id": {
                 "type": "string", 
@@ -214,17 +214,24 @@ RAGAGENT_SCHEMA = {
     },
 
     "save_state": {
-        "description": "Save the current state of document store",
+        "description": "Save the current state of the document store to disk",
         "parameters": {},
         "process_output": True,
         "function": "_save_state"
     },
 
-    "load_index": {
-        "description": "Load the index from saved state",
+    "load_state": {
+        "description": "Load the document store state from disk",
         "parameters": {},
         "process_output": True,
         "function": "_load_state"
+    },
+
+    "view_store": {
+        "description": "View the current state of the document store",
+        "parameters": {},
+        "process_output": True,
+        "function": "_view_document_store"
     }
 }
     
