@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from mainframe import BaseAgent, Tool
+from backend.mainframe import BaseAgent, Tool
 from backend.schemas.operation_schemas import FILEAGENT_SCHEMA
 
 class InternetAgent(BaseAgent):

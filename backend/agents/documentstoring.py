@@ -10,11 +10,11 @@ from backend.agents.fileagent import FileAgent
 import backend.agents.ragchunking as rc
 import argparse
 import sqlite3
-import logging
+# import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# # Configure logging
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
 
 def serialize_datetime(obj):
     """Helper function to serialize datetime objects to JSON"""
@@ -222,7 +222,7 @@ class DocumentStore:
                 # Use FileAgent's _get_metadata_single directly
                 metadata = self.file_agent._get_metadata_single(path)
                 if "error" in metadata:
-                    logger.error(f"Error getting metadata for {path}: {metadata['error']}")
+                    # logger.error(f"Error getting metadata for {path}: {metadata['error']}")
                     continue
 
                 doc_id = metadata["file_hash"]
@@ -287,7 +287,7 @@ class DocumentStore:
             return {"message": "Successfully saved state"}
             
         except Exception as e:
-            logger.error(f"Error saving state: {str(e)}")
+            # logger.error(f"Error saving state: {str(e)}")
             return {"error": str(e)}
         
     def _load_state(self) -> Dict:
@@ -303,7 +303,7 @@ class DocumentStore:
             return {"message": "Successfully loaded state"}
             
         except Exception as e:
-            logger.error(f"Error loading state: {str(e)}")
+            # logger.error(f"Error loading state: {str(e)}")
             return {"error": str(e)}
         
     def _search(self, query: str, top_k: int = 5) -> List[Dict]:
@@ -346,7 +346,7 @@ class DocumentStore:
             return results
         
         except Exception as e:
-            logger.error(f"Error during FAISS search: {str(e)}")
+            # logger.error(f"Error during FAISS search: {str(e)}")
             raise Exception(f"Error during FAISS search: {str(e)}")
             
     def _process_document(self, path: str, metadata: Dict = None) -> Tuple[List[str], np.ndarray]:
@@ -361,70 +361,70 @@ class DocumentStore:
         embeddings = self.embedding_model.encode([chunk for chunk in chunks])
         return chunks, embeddings
     
-    def _view_document_store(self) -> Dict:
-        """View the contents of the document store"""
-        try:
-            conn = sqlite3.connect(self.indexed_files_path)
-            c = conn.cursor()
+    # def _view_document_store(self) -> Dict:
+    #     """View the contents of the document store"""
+    #     try:
+    #         conn = sqlite3.connect(self.indexed_files_path)
+    #         c = conn.cursor()
             
-            # Get all tables from the database
-            c.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = c.fetchall()
-            logger.info(f"Tables in the database: {tables}")
+    #         # Get all tables from the database
+    #         c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    #         tables = c.fetchall()
+    #         # logger.info(f"Tables in the database: {tables}")
             
-            # Query document tables
-            c.execute("SELECT * FROM documents")
-            documents = c.fetchall()
-            logger.info(f"Documents in the database: {len(documents)}")
+    #         # Query document tables
+    #         c.execute("SELECT * FROM documents")
+    #         documents = c.fetchall()
+    #         # logger.info(f"Documents in the database: {len(documents)}")
             
-            store_info = {
-                "tables": [table[0] for table in tables],
-                "document_count": len(documents),
-                "documents": []
-            }
+    #         store_info = {
+    #             "tables": [table[0] for table in tables],
+    #             "document_count": len(documents),
+    #             "documents": []
+    #         }
             
-            for doc in documents:
-                doc_id, path, metadata_str, chunks_str = doc
+    #         for doc in documents:
+    #             doc_id, path, metadata_str, chunks_str = doc
                 
-                try:
-                    metadata = json.loads(metadata_str)
-                    chunks = json.loads(chunks_str)
+    #             try:
+    #                 metadata = json.loads(metadata_str)
+    #                 chunks = json.loads(chunks_str)
                     
-                    doc_info = {
-                        "doc_id": doc_id,
-                        "path": path,
-                        "metadata": metadata,
-                        "chunk_count": len(chunks),
-                        "first_chunks": chunks[:3] if chunks else []
-                    }
-                    store_info["documents"].append(doc_info)
+    #                 doc_info = {
+    #                     "doc_id": doc_id,
+    #                     "path": path,
+    #                     "metadata": metadata,
+    #                     "chunk_count": len(chunks),
+    #                     "first_chunks": chunks[:3] if chunks else []
+    #                 }
+    #                 store_info["documents"].append(doc_info)
                     
-                except json.JSONDecodeError as e:
-                    logger.error(f"Error parsing JSON for document {doc_id}: {str(e)}")
+    #             except json.JSONDecodeError as e:
+    #                 # logger.error(f"Error parsing JSON for document {doc_id}: {str(e)}")
             
-            # Query document_lookup table
-            c.execute("SELECT COUNT(*) FROM document_lookup")
-            lookup_count = c.fetchone()[0]
-            store_info["lookup_entries"] = lookup_count
+    #         # Query document_lookup table
+    #         c.execute("SELECT COUNT(*) FROM document_lookup")
+    #         lookup_count = c.fetchone()[0]
+    #         store_info["lookup_entries"] = lookup_count
             
-            conn.close()
-            return store_info
+    #         conn.close()
+    #         return store_info
             
-        except Exception as e:
-            logger.error(f"Error viewing document store: {str(e)}")
-            return {"error": str(e)}
+    #     except Exception as e:
+    #         # logger.error(f"Error viewing document store: {str(e)}")
+    #         return {"error": str(e)}
         
-    def _log_document_store_state(self, operation: str):
+    # def _log_document_store_state(self, operation: str):
         # Log the current state of the document store
-        logger.info(f"\n=== Document Store State before {operation} ===")
-        logger.info(f"Number of documents: {len(self.documents)}")
-        logger.info(f"FAISS index size: {self.vector_index.ntotal}")
-        logger.info(f"Document lookup entries: {len(self.document_lookup)}")
-        if self.documents:
-            logger.info("Documents in store:")
-            for doc in self.documents:
-                logger.info(f"- {doc['doc_id']}: {doc['path']}")
-        logger.info("================================\n")
+        # # logger.info(f"\n=== Document Store State before {operation} ===")
+        # logger.info(f"Number of documents: {len(self.documents)}")
+        # logger.info(f"FAISS index size: {self.vector_index.ntotal}")
+        # logger.info(f"Document lookup entries: {len(self.document_lookup)}")
+        # if self.documents:
+        #     logger.info("Documents in store:")
+        #     for doc in self.documents:
+        #         logger.info(f"- {doc['doc_id']}: {doc['path']}")
+        # logger.info("================================\n")
         
 # Example usage
 if __name__ == "__main__":

@@ -6,11 +6,11 @@ from backend.schemas.operation_schemas import RAGAGENT_SCHEMA
 from backend.prompts.ragagent_prompt import PROMPT_ROUTER, ROUTER_EXAMPLES, FEW_SHOT_EXAMPLES, PROMPT_REASONING
 # from backend.tools.ragagent_tools import RAGAgentTools
 import copy
-import logging
+# import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
 
 # Structure
 # Query preprocessing --> query vectorization --> retreival phase --> prompt augementation --> LLM generation --> response postprocessing
@@ -35,9 +35,9 @@ class RAGAgent(BaseAgent):
         
         router_response = self.llm.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama3-70b-8192",
+            model="llama-4-scout-17b-16e-instruct",
             temperature=0.2,
-            max_tokens=100,
+            max_completion_tokens=100,
         )
         router_response = router_response.choices[0].message.content
         router_json_response = self.file_agent._extract_json(router_response)
@@ -77,7 +77,7 @@ class RAGAgent(BaseAgent):
         try:
             return self.document_store._index_documents(documents)
         except Exception as e:
-            logger.error(f"Error indexing documents: {str(e)}")
+            # logger.error(f"Error indexing documents: {str(e)}")
             return {"error": str(e)}
     
     def _update_document(self, doc_id, path):
@@ -194,9 +194,9 @@ class RAGAgent(BaseAgent):
                 
                 reasoning_response = self.llm.chat.completions.create(
                     messages=[{"role": "user", "content": reasoning_prompt}],
-                    model="llama3-70b-8192",
+                    model="llama-4-scout-17b-16e-instruct",
                     temperature=0.2,
-                    max_tokens=100,
+                    max_completion_tokens=100,
                 )
                 
                 reasoning_response = reasoning_response.choices[0].message.content

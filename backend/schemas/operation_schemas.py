@@ -38,13 +38,26 @@ FILEAGENT_SCHEMA = {
         "function": "_scan_operation"
     },
     
+    "get_metadata": {
+        "description": "Get detailed metadata of a specific file or directory",
+        "parameters": {
+            "source_path": {
+                "type": "string", 
+                "required": True, 
+                "description": "Path of the file or directory to get metadata for"
+            }
+        },
+        "process_output": True,
+        "function": "_get_metadata_single"
+    },
+    
     "delete": {
         "description": "Delete a file or directory",
         "parameters": {
             "source_path": {
                 "type": "Union[str, List[str]]", 
                 "required": True, 
-                "description": "Path of file/folder to delete"
+                "description": "Full path to the file/folder to delete (e.g., ~/Documents/file.pdf)"
             }
         },
         "process_output": False,
@@ -57,12 +70,12 @@ FILEAGENT_SCHEMA = {
             "source_path": {
                 "type": "string", 
                 "required": True, 
-                "description": "Current file path"
+                "description": "Full path to the current file (e.g., ~/Documents/file.pdf)"
             },
             "destination_path": {
                 "type": "string", 
                 "required": True, 
-                "description": "New file path"
+                "description": "Full path to the new file location (e.g., ~/Documents/new_name.pdf)"
             }
         },
         "process_output": False,
@@ -75,12 +88,12 @@ FILEAGENT_SCHEMA = {
             "source_path": {
                 "type": "string", 
                 "required": True, 
-                "description": "Source file path"
+                "description": "Full path to the source file (e.g., ~/Documents/file.pdf)"
             },
             "destination_path": {
                 "type": "string", 
                 "required": True, 
-                "description": "Destination file path"
+                "description": "Full path to the destination (e.g., ~/Downloads/file.pdf)"
             }
         },
         "process_output": False,
@@ -93,12 +106,12 @@ FILEAGENT_SCHEMA = {
             "source_path": {
                 "type": "Union[str, List[str]]", 
                 "required": True, 
-                "description": "Source file path"
+                "description": "Full path to the source file(s) (e.g., ~/Documents/file.pdf)"
             },
             "destination_path": {
                 "type": "Union[str, List[str]]", 
                 "required": True, 
-                "description": "Destination file path"
+                "description": "Full path to the destination (e.g., ~/Downloads/file.pdf)"
             }
         },
         "process_output": False,
@@ -111,7 +124,7 @@ FILEAGENT_SCHEMA = {
             "source_path": {
                 "type": "string", 
                 "required": True, 
-                "description": "Path for the new file"
+                "description": "Full path for the new file (e.g., ~/Documents/new_file.txt)"
             },
             "content": {
                 "type": "string", 
@@ -129,7 +142,7 @@ FILEAGENT_SCHEMA = {
             "source_path": {
                 "type": "string", 
                 "required": True, 
-                "description": "Path for the new directory"
+                "description": "Full path for the new directory (e.g., ~/Documents/new_folder)"
             }
         },
         "process_output": False,

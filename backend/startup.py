@@ -4,18 +4,18 @@ from backend.mainframe import BaseAgent
 from backend.agents.fileagent import FileAgent
 from backend.agents.internet_agent import InternetAgent
 from backend.agents.rag_agent import RAGAgent
-import logging
-import sys
+# import logging
+# import sys
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
+# # Configure logging
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         logging.StreamHandler(sys.stdout)
+#     ]
+# )
+# logger = logging.getLogger(__name__)
 
 class AgentManager:
     def __init__(self):
@@ -34,9 +34,9 @@ class AgentManager:
             )
             self.agents["internet"] = InternetAgent()
             self.agents["rag"] = RAGAgent()
-            logger.info("Successfully initialized all agents")
+            # logger.info("Successfully initialized all agents")
         except Exception as e:
-            logger.error(f"Error initializing agents: {str(e)}")
+            # logger.error(f"Error initializing agents: {str(e)}")
             raise
 
     def process_user_input(self, user_input: str) -> Optional[str]:
@@ -58,14 +58,14 @@ class AgentManager:
             return response
             
         except Exception as e:
-            logger.error(f"Error processing user input: {str(e)}")
+            # logger.error(f"Error processing user input: {str(e)}")
             return f"An error occurred while processing your request: {str(e)}"
 
 def main():
     """Main entry point for the application"""
     try:
         agent_manager = AgentManager()
-        logger.info("Agent system initialized successfully")
+        # logger.info("Agent system initialized successfully")
         
         print("\nWelcome to the Agent System!")
         print("You can ask questions or give instructions, and I'll route them to the appropriate agent.")
@@ -82,8 +82,8 @@ def main():
             print(f"\nResponse: {response}\n")
             
     except Exception as e:
-        logger.error(f"Fatal error in main loop: {str(e)}")
-        sys.exit(1)
+        # logger.error(f"Fatal error in main loop: {str(e)}")
+        # sys.exit(1)
 
 if __name__ == "__main__":
     main()

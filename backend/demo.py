@@ -3,32 +3,48 @@
 SCYTA Demo - Multi-Agent AI System Demonstration
 ==============================================
 
-This demo showcases the integration of three intelligent agents:
-1. FileAgent - File and directory operations
-2. RAGAgent - Document retrieval and Q&A
-3. InternetAgent - Web search capabilities
+This demo showcases the integration of three intelligent agents, orchestrated
+by a central decision router:
+1. FileAgent - For file and directory operations.
+2. RAGAgent - For document retrieval and Q&A from a knowledge base.
+3. InternetAgent - For web search and information gathering.
 
-Author: SCYTA Team
+It provides a command-line interface for users to interact with the system.
 """
 
-import os
 import sys
-import json
-import time
-from typing import Dict, List, Optional
+from typing import Dict, Any
 from pathlib import Path
 from datetime import datetime
-import textwrap
-import pprint
 from dotenv import load_dotenv
 
-# Load environment variables
+# Add the project root to Python path for local imports
+# This ensures that 'backend' can be found from the script's location
+try:
+    from backend.agents.fileagent import FileAgent
+    from backend.agents.ragagent import RAGAgent
+    from backend.agents.internetagent import InternetAgent
+    from backend.router import DecisionRouter
+    from backend.chathistory import chat_history
+except ImportError:
+    # Adjust path if script is run from a different directory
+    current_dir = Path(__file__).parent
+    project_root = current_dir.parent
+    sys.path.insert(0, str(project_root))
+    from backend.agents.fileagent import FileAgent
+    from backend.agents.ragagent import RAGAgent
+    from backend.agents.internetagent import InternetAgent
+    from backend.router import DecisionRouter
+    from backend.chathistory import chat_history
+
+
+# Load environment variables from a .env file
 load_dotenv()
 
-# Color codes for terminal output (ANSI escape sequences)
+# --- ANSI Color Codes for Terminal Output ---
 class Colors:
     HEADER = '\033[96m\033[1m'      # Bright Cyan
-    SUCCESS = '\033[92m\033[1m'     # Bright Green  
+    SUCCESS = '\033[92m\033[1m'     # Bright Green
     ERROR = '\033[91m\033[1m'       # Bright Red
     WARNING = '\033[93m\033[1m'     # Bright Yellow
     INFO = '\033[94m\033[1m'        # Bright Blue
@@ -36,500 +52,328 @@ class Colors:
     USER = '\033[97m\033[1m'        # Bright White
     RESET = '\033[0m'               # Reset all formatting
 
-# Add the project root to Python path for imports
-current_dir = Path(__file__).parent
-project_root = current_dir.parent if current_dir.name == 'backend' else current_dir
-sys.path.insert(0, str(project_root))
-
-try:
-    from backend.agents.fileagent import FileAgent
-    from backend.agents.ragagent import RAGAgent  
-    from backend.agents.internetagent import InternetAgent
-    from backend.router import DecisionRouter
-    from backend.chathistory import chat_history
-except ImportError as e:
-    print(f"Error importing modules: {e}")
-    print("Please ensure all dependencies are installed and paths are correct.")
-    sys.exit(1)
-
-
 class ScytaDemo:
     """Main demo class for the SCYTA multi-agent system."""
-    
+
     def __init__(self):
         """Initialize the demo with all agents and configuration."""
-        self.width = 80
-        self.agents = {}
-        self.router = None
-        self.conversation_history = []
-        self.session_start = datetime.now()
-        
-        # Color scheme using ANSI codes
-        self.colors = {
-            'header': Colors.HEADER,
-            'success': Colors.SUCCESS,
-            'error': Colors.ERROR,
-            'warning': Colors.WARNING,
-            'info': Colors.INFO,
-            'agent': Colors.AGENT,
-            'user': Colors.USER,
-            'reset': Colors.RESET
-        }
-        
+        self.agents: Dict[str, Any] = {}
+        self.router: DecisionRouter = None
+        self.conversation_history: list = []
+        self.operation_history: list = []
+        self.colors = Colors
+
     def print_banner(self):
-        """Display the SCYTA banner."""
+        """Display the SCYTA welcome banner and instructions."""
         banner = f"""
-{self.colors['header']}
+{self.colors.HEADER}
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                               ║
-║    ███████╗ ██████╗██╗   ██╗████████╗ █████╗                                 ║
-║    ██╔════╝██╔════╝╚██╗ ██╔╝╚══██╔══╝██╔══██╗                                ║
-║    ███████╗██║      ╚████╔╝    ██║   ███████║                                ║
-║    ╚════██║██║       ╚██╔╝     ██║   ██╔══██║                                ║
-║    ███████║╚██████╗   ██║      ██║   ██║  ██║                                ║
-║    ╚══════╝ ╚═════╝   ╚═╝      ╚═╝   ╚═╝  ╚═╝                                ║
-║                                                                               ║
-║              Smart Cognitive Your Task Assistant                              ║
-║                   Multi-Agent AI System Demo                                  ║
+║              ███████╗ ██████╗██╗   ██╗████████╗ █████╗                        ║
+║              ██╔════╝██╔════╝╚██╗ ██╔╝╚══██╔══╝██╔══██╗                       ║
+║              ███████╗██║      ╚████╔╝    ██║   ███████║                       ║
+║              ╚════██║██║       ╚██╔╝     ██║   ██╔══██║                       ║
+║              ███████║╚██████╗   ██║      ██║   ██║  ██║                       ║
+║              ╚══════╝ ╚═════╝   ╚═╝      ╚═╝   ╚═╝  ╚═╝                       ║
 ║                                                                               ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
-{self.colors['reset']}
+{self.colors.RESET}
 
-{self.colors['info']}Welcome to SCYTA - Your intelligent multi-agent assistant!{self.colors['reset']}
+{self.colors.WARNING}Available Agents:{self.colors.RESET}
+  🗂️  {self.colors.AGENT}FileAgent{self.colors.RESET}    - File operations, directory management, file manipulation
+  📚 {self.colors.AGENT}RAGAgent{self.colors.RESET}     - Document retrieval, Q&A, knowledge base queries
+  🌐 {self.colors.AGENT}InternetAgent{self.colors.RESET} - Web search, information gathering
 
-{self.colors['warning']}Available Agents:{self.colors['reset']}
-  🗂️  {self.colors['agent']}FileAgent{self.colors['reset']}    - File operations, directory management, file manipulation
-  📚 {self.colors['agent']}RAGAgent{self.colors['reset']}     - Document retrieval, Q&A, knowledge base queries  
-  🌐 {self.colors['agent']}InternetAgent{self.colors['reset']} - Web search, information gathering
+{self.colors.INFO}Commands:{self.colors.RESET}
+  • Type your request naturally - the system will route to the best agent.
+  • 'help'       - Show detailed help and examples.
+  • 'history'    - View conversation history.
+  • 'operations' - View detailed operation history.
+  • 'agents'     - Show agent status and capabilities.
+  • 'clear'      - Clear all history for the current session.
+  • 'exit'|'quit' - End the session.
 
-{self.colors['info']}Commands:{self.colors['reset']}
-  • Type your request naturally - the system will route to appropriate agents
-  • 'help' - Show detailed help and examples
-  • 'history' - View conversation history
-  • 'agents' - Show agent status and capabilities
-  • 'clear' - Clear conversation history
-  • 'exit' or 'quit' - End the session
-
-{self.colors['success']}Initializing agents...{self.colors['reset']}
+{self.colors.SUCCESS}Initializing system...{self.colors.RESET}
 """
         print(banner)
-        
-    def initialize_agents(self):
-        """Initialize all agents with error handling."""
+
+    def initialize_system(self):
+        """Initialize all agents and the decision router with error handling."""
         agent_configs = [
-            ('FileAgent', 'file', FileAgent, 'File operations and directory management'),
-            ('RAGAgent', 'rag', RAGAgent, 'Document retrieval and question answering'), 
-            ('InternetAgent', 'internet', InternetAgent, 'Web search and information gathering')
+            ('file', FileAgent, "File operations and directory management"),
+            ('rag', RAGAgent, "Document retrieval and question answering"),
+            ('internet', InternetAgent, "Web search and information gathering")
         ]
-        
-        for agent_name, agent_key, agent_class, description in agent_configs:
+
+        for key, agent_class, description in agent_configs:
+            agent_name = agent_class.__name__
             try:
-                print(f"  {self.colors['info']}→{self.colors['reset']} Initializing {agent_name}...", end="")
-                
+                print(f"  {self.colors.INFO}→{self.colors.RESET} Initializing {agent_name}...", end="", flush=True)
+                # Special handling for FileAgent's directory arguments
                 if agent_class == FileAgent:
-                    agent = agent_class(
-                        name=agent_name,
-                        description=description,
-                        directories=["~/Documents", "~/Downloads"]
-                    )
+                    agent = agent_class(name=agent_name, description=description, directories=["~/Documents", "~/Downloads"])
                 else:
                     agent = agent_class(name=agent_name, description=description)
-                    
-                self.agents[agent_key] = agent
-                print(f" {self.colors['success']}✓{self.colors['reset']}")
-                
+                self.agents[key] = agent
+                print(f" {self.colors.SUCCESS}✓{self.colors.RESET}")
             except Exception as e:
-                print(f" {self.colors['error']}✗ Failed: {str(e)}{self.colors['reset']}")
-                self.agents[agent_key] = None
-        
-        # Initialize router
-        try:
-            print(f"  {self.colors['info']}→{self.colors['reset']} Initializing Decision Router...", end="")
-            self.router = DecisionRouter()
-            print(f" {self.colors['success']}✓{self.colors['reset']}")
-        except Exception as e:
-            print(f" {self.colors['error']}✗ Failed: {str(e)}{self.colors['reset']}")
-            
-        print(f"\n{self.colors['success']}All agents initialized successfully!{self.colors['reset']}\n")
-        
-    def format_agent_response(self, response: Dict, agent_name: str) -> str:
-        """Format agent response for user-friendly display."""
-        formatted = f"\n{self.colors['agent']}🤖 {agent_name} Response:{self.colors['reset']}\n"
-        formatted += "═" * 50 + "\n"
-        
-        if isinstance(response, dict):
-            # Handle different response types
-            if "error" in response:
-                formatted += f"{self.colors['error']}❌ Error: {response['error']}{self.colors['reset']}\n"
-            elif "operations" in response:
-                formatted += self.format_operations(response["operations"])
-            elif "results" in response:
-                formatted += self.format_results(response["results"])
-            elif "message" in response:
-                formatted += f"{self.colors['success']}✅ {response['message']}{self.colors['reset']}\n"
-            else:
-                formatted += self.format_generic_response(response)
-        elif isinstance(response, list):
-            formatted += self.format_list_response(response)
-        else:
-            formatted += f"{self.colors['info']}{str(response)}{self.colors['reset']}\n"
-            
-        return formatted
-        
-    def format_operations(self, operations: List[Dict]) -> str:
-        """Format operation lists in a readable way."""
-        if not operations:
-            return f"{self.colors['info']}No operations to display.{self.colors['reset']}\n"
-            
-        formatted = f"{self.colors['info']}📋 Planned Operations:{self.colors['reset']}\n\n"
-        
-        for i, op in enumerate(operations, 1):
-            formatted += f"{self.colors['warning']}  {i}. {op.get('operation', 'Unknown').title()}{self.colors['reset']}\n"
-            
-            # Format parameters
-            params = op.get('parameters', {})
-            if params:
-                formatted += f"     {self.colors['info']}Parameters:{self.colors['reset']}\n"
-                for key, value in params.items():
-                    if isinstance(value, str) and len(value) > 50:
-                        value = value[:47] + "..."
-                    formatted += f"       • {key}: {self.colors['user']}{value}{self.colors['reset']}\n"
-            
-            # Show post-processing if available  
-            if op.get('post_processing'):
-                formatted += f"     {self.colors['info']}Post-processing: {op['post_processing']}{self.colors['reset']}\n"
-                
-            formatted += "\n"
-            
-        return formatted
-        
-    def format_results(self, results: List[Dict]) -> str:
-        """Format result lists in a readable way."""
-        if not results:
-            return f"{self.colors['info']}No results to display.{self.colors['reset']}\n"
-            
-        formatted = f"{self.colors['success']}📊 Results:{self.colors['reset']}\n\n"
-        
-        for i, result in enumerate(results, 1):
-            if isinstance(result, dict):
-                if "error" in result:
-                    formatted += f"{self.colors['error']}  {i}. Error: {result['error']}{self.colors['reset']}\n"
-                elif "message" in result:
-                    formatted += f"{self.colors['success']}  {i}. {result['message']}{self.colors['reset']}\n"
-                elif "metadatas" in result:
-                    formatted += f"  {i}. {self.colors['info']}Found {len(result['metadatas'])} items{self.colors['reset']}\n"
-                    if result.get('total_files'):
-                        formatted += f"     Total files: {result['total_files']}\n"
-                    if result.get('total_size'):
-                        formatted += f"     Total size: {self._format_size(result['total_size'])}\n"
-                else:
-                    formatted += f"  {i}. {self.colors['info']}{str(result)[:100]}{'...' if len(str(result)) > 100 else ''}{self.colors['reset']}\n"
-            else:
-                formatted += f"  {i}. {self.colors['info']}{str(result)}{self.colors['reset']}\n"
-                
-        return formatted + "\n"
-        
-    def format_generic_response(self, response: Dict) -> str:
-        """Format generic dictionary responses."""
-        formatted = ""
-        for key, value in response.items():
-            if key in ['timestamp', 'operation_id']:
-                continue
-                
-            formatted += f"{self.colors['info']}📌 {key.title().replace('_', ' ')}:{self.colors['reset']}\n"
-            
-            if isinstance(value, (dict, list)):
-                formatted += f"   {self._format_nested_data(value, indent=3)}\n"
-            else:
-                formatted += f"   {self.colors['user']}{value}{self.colors['reset']}\n"
-                
-        return formatted
-        
-    def format_list_response(self, response: List) -> str:
-        """Format list responses."""
-        formatted = f"{self.colors['info']}📋 Results ({len(response)} items):{self.colors['reset']}\n\n"
-        
-        for i, item in enumerate(response, 1):
-            if isinstance(item, dict):
-                if "error" in item:
-                    formatted += f"{self.colors['error']}  {i}. Error: {item['error']}{self.colors['reset']}\n"
-                elif "message" in item:
-                    formatted += f"{self.colors['success']}  {i}. {item['message']}{self.colors['reset']}\n"
-                else:
-                    formatted += f"  {i}. {self._format_nested_data(item, indent=5)}\n"
-            else:
-                formatted += f"  {i}. {self.colors['user']}{item}{self.colors['reset']}\n"
-                
-        return formatted
-        
-    def _format_nested_data(self, data, indent=0) -> str:
-        """Helper to format nested dictionaries and lists."""
-        spaces = " " * indent
-        if isinstance(data, dict):
-            formatted = ""
-            for key, value in data.items():
-                if isinstance(value, (dict, list)) and value:
-                    formatted += f"{spaces}{key}: {self._format_nested_data(value, indent + 2)}\n"
-                else:
-                    formatted += f"{spaces}{key}: {self.colors['user']}{value}{self.colors['reset']}\n"
-            return formatted
-        elif isinstance(data, list):
-            return f"[{len(data)} items]"
-        else:
-            return str(data)
-            
-    def _format_size(self, size: int) -> str:
-        """Format file size in human readable format."""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size < 1024:
-                return f"{size:.1f}{unit}"
-            size /= 1024
-        return f"{size:.1f}PB"
-        
+                print(f" {self.colors.ERROR}✗ Failed: {e}{self.colors.RESET}")
+                self.agents[key] = None
+
+        print(f"\n{self.colors.SUCCESS}System is ready. Please enter your request.{self.colors.RESET}\n")
+
     def show_help(self):
-        """Display detailed help information."""
+        """Display detailed help information with examples for each agent."""
         help_text = f"""
-{self.colors['header']}📖 SCYTA Help & Examples{self.colors['reset']}
+{self.colors.HEADER}📖 SCYTA Help & Examples{self.colors.RESET}
 ═══════════════════════════════════════════════════════════════
 
-{self.colors['agent']}🗂️  FileAgent Examples:{self.colors['reset']}
-  • "scan my Documents folder"
-  • "create a new file called test.txt with hello world content"
-  • "move all .pdf files from Downloads to Documents" 
-  • "delete the file named old_data.csv"
-  • "rename photo.jpg to vacation_photo.jpg"
-  • "copy report.docx to the backup folder"
+{self.colors.AGENT}🗂️  FileAgent Examples:{self.colors.RESET}
+  • "Scan my Documents folder for all python files."
+  • "Create a new file in my Downloads folder named 'report.txt' with the content 'This is a test'."
+  • "Move all .pdf files from Downloads to Documents/PDFs."
+  • "Delete the file named 'old_data.csv' from my Desktop."
 
-{self.colors['agent']}📚 RAGAgent Examples:{self.colors['reset']}
-  • "search for documents about machine learning"
-  • "what does my research paper say about neural networks?"
-  • "find information about project requirements"
-  • "summarize the content of technical_doc.pdf"
+{self.colors.AGENT}📚 RAGAgent Examples:{self.colors.RESET}
+  • "Search for documents about machine learning."
+  • "What does my research paper say about neural networks?"
+  • "Summarize the content of 'technical_spec_v1.pdf'."
 
-{self.colors['agent']}🌐 InternetAgent Examples:{self.colors['reset']}
-  • "search the web for latest AI news"
-  • "find information about Python programming"
-  • "what's the weather like today?"
-  • "search for tutorial on machine learning"
+{self.colors.AGENT}🌐 InternetAgent Examples:{self.colors.RESET}
+  • "Search the web for the latest news on large language models."
+  • "Find a good tutorial on how to use the Python requests library."
+  • "What is the current weather in New York City?"
 
-{self.colors['info']}💡 Tips:{self.colors['reset']}
-  • Be specific about file paths and names
-  • The system automatically determines which agent to use
-  • You can combine multiple operations in one request
-  • Use 'history' to see previous operations
-  • Type 'agents' to check agent status
+{self.colors.INFO}💡 Tips:{self.colors.RESET}
+  • The system automatically determines which agent to use based on your query.
+  • Be as specific as possible for better results (e.g., provide full paths).
 """
         print(help_text)
-        
-    def show_agents_status(self):
-        """Display current agent status and capabilities."""
-        status_text = f"""
-{self.colors['header']}🤖 Agent Status & Capabilities{self.colors['reset']}
-═══════════════════════════════════════════════════════════════
 
-"""
-        for agent_key, agent in self.agents.items():
+    def show_agents_status(self):
+        """Display the current status and capabilities of all agents."""
+        status_text = f"\n{self.colors.HEADER}🤖 Agent Status & Capabilities{self.colors.RESET}\n"
+        status_text += "═══════════════════════════════════════════════════════════════\n\n"
+        for key, agent in self.agents.items():
+            agent_name = agent.name if agent else f"{key.title()}Agent"
             if agent:
-                status = f"{self.colors['success']}✅ Online{self.colors['reset']}"
-                capabilities = "Fully operational"
+                status = f"{self.colors.SUCCESS}✅ Online{self.colors.RESET}"
+                desc = agent.description
             else:
-                status = f"{self.colors['error']}❌ Offline{self.colors['reset']}"
-                capabilities = "Not available"
-                
-            agent_name = agent_key.title() + "Agent"
-            status_text += f"{self.colors['agent']}{agent_name:<15}{self.colors['reset']} {status}\n"
-            status_text += f"  └─ {capabilities}\n\n"
-            
-        # Router status
-        router_status = f"{self.colors['success']}✅ Online{self.colors['reset']}" if self.router else f"{self.colors['error']}❌ Offline{self.colors['reset']}"
-        status_text += f"{self.colors['info']}Decision Router  {router_status}{self.colors['reset']}\n"
-        
+                status = f"{self.colors.ERROR}❌ Offline{self.colors.RESET}"
+                desc = "Not available due to an initialization error."
+
+            status_text += f"{self.colors.AGENT}{agent_name:<15}{self.colors.RESET} {status}\n"
+            status_text += f"  └─ {desc}\n\n"
+
+        router_status = f"{self.colors.SUCCESS}✅ Online{self.colors.RESET}" if self.router else f"{self.colors.ERROR}❌ Offline{self.colors.RESET}"
+        status_text += f"{self.colors.INFO}Decision Router  {router_status}{self.colors.RESET}\n"
         print(status_text)
-        
+
     def show_history(self):
-        """Display conversation history."""
+        """Display the high-level conversation history."""
         if not self.conversation_history:
-            print(f"{self.colors['info']}📝 No conversation history yet.{self.colors['reset']}")
+            print(f"{self.colors.INFO}📝 No conversation history yet.{self.colors.RESET}")
             return
-            
-        print(f"\n{self.colors['header']}📜 Conversation History{self.colors['reset']}")
-        print("═" * 50)
-        
+
+        print(f"\n{self.colors.HEADER}📜 Conversation History{self.colors.RESET}\n" + "═" * 50)
         for i, entry in enumerate(self.conversation_history, 1):
             timestamp = entry['timestamp'].strftime("%H:%M:%S")
-            print(f"\n{self.colors['info']}[{timestamp}] Query {i}:{self.colors['reset']}")
-            print(f"  {self.colors['user']}User: {entry['query']}{self.colors['reset']}")
-            print(f"  {self.colors['agent']}Agent: {entry['agent_used']}{self.colors['reset']}")
-            
-            if 'summary' in entry:
-                print(f"  {self.colors['info']}Result: {entry['summary']}{self.colors['reset']}")
-                
+            summary_color = self.colors.SUCCESS if "Success" in entry['summary'] else self.colors.ERROR
+            print(f"\n{self.colors.INFO}[{timestamp}] Query {i}:{self.colors.RESET}")
+            print(f"  {self.colors.USER}User: {entry['query']}{self.colors.RESET}")
+            print(f"  {self.colors.AGENT}Agent Used: {entry['agent_used']}{self.colors.RESET}")
+            print(f"  {self.colors.INFO}Result: {summary_color}{entry['summary']}{self.colors.RESET}")
         print()
-        
-    def clear_history(self):
-        """Clear conversation history."""
-        self.conversation_history.clear()
-        if hasattr(chat_history, 'clear_history'):
-            chat_history.clear_history()
-        print(f"{self.colors['success']}✅ Conversation history cleared.{self.colors['reset']}")
-        
-    def process_query(self, query: str) -> None:
-        """Process user query and route to appropriate agent."""
-        if not query.strip():
+
+    def show_operations(self):
+        """Display a detailed log of all operations executed by agents."""
+        if not self.operation_history:
+            print(f"{self.colors.INFO}⚙️ No operations have been executed yet.{self.colors.RESET}")
             return
+
+        print(f"\n{self.colors.HEADER}⚙️ Detailed Operation History{self.colors.RESET}\n" + "═" * 50)
+        for i, op in enumerate(self.operation_history, 1):
+            timestamp = op['timestamp'].strftime("%H:%M:%S")
+            status_icon = "✅" if op['success'] else "❌"
+            op_name = op.get('operation', 'unknown').replace('_', ' ').title()
+
+            print(f"\n{self.colors.INFO}[{timestamp}] Operation {i}: {op_name} {status_icon}{self.colors.RESET}")
+            print(f"  {self.colors.USER}Triggered by: \"{op['query']}\"{self.colors.RESET}")
+
+            params = op.get('parameters', {})
+            if params:
+                param_str = ", ".join(f"{k}='{str(v)[:50]}...'" if isinstance(v, str) and len(str(v)) > 50 else f"{k}='{v}'" for k, v in params.items())
+                print(f"  {self.colors.INFO}Parameters: {self.colors.USER}{param_str}{self.colors.RESET}")
+        print()
+
+    def clear_history(self):
+        """Clear all conversation and operation history for the session."""
+        self.conversation_history.clear()
+        self.operation_history.clear()
+        chat_history.clear_history()  # Clear the shared history module as well
+        print(f"{self.colors.SUCCESS}✅ Conversation and operation history has been cleared.{self.colors.RESET}")
+
+    def _process_and_display_response(self, response: Dict[str, Any], agent_name: str, query: str):
+        """
+        Processes a structured agent response, displays it in a user-friendly
+        format, and updates all history logs. This is the primary output handler.
+        """
+        if not response:
+            print(f"{self.colors.ERROR}❌ Agent returned an empty response.{self.colors.RESET}")
+            return
+
+        # --- Calculate operation summary metrics ---
+        operations = response.get("operations_executed", [])
+        total_ops = len(operations)
+        success_count = sum(1 for op in operations if not (isinstance(op.get("result", {}), dict) and "error" in op.get("result", {})))
+        success = not response.get("error") and (not operations or success_count == total_ops)
+
+        # --- Build Formatted Output with Operation Summary Header ---
+        formatted_output = f"\n{self.colors.HEADER}🔍 Operation Summary{self.colors.RESET}\n"
+        formatted_output += "═" * 50 + "\n"
+        formatted_output += f"{self.colors.INFO}📝 Request:{self.colors.RESET} {query}\n"
+        formatted_output += f"{self.colors.INFO}⚙️  Operations Executed:{self.colors.RESET} {total_ops}\n"
+        formatted_output += f"{self.colors.INFO}📊 Status:{self.colors.RESET} {'✅ Success' if success else '❌ Errors occurred'}\n\n"
+
+        # --- Agent Response Section ---
+        formatted_output += f"{self.colors.AGENT}🤖 {agent_name} Response:{self.colors.RESET}\n"
+        formatted_output += "═" * 50 + "\n"
+
+        if "error" in response:
+            formatted_output += f"{self.colors.ERROR}❌ Error: {response['error']}{self.colors.RESET}\n"
             
-        print(f"\n{self.colors['info']}🔄 Processing your request...{self.colors['reset']}")
-        
-        # Simple routing logic for demo
-        query_lower = query.lower()
-        agent_used = None
-        response = None
-        
-        try:
-            # Determine which agent to use based on keywords
-            if any(keyword in query_lower for keyword in ['file', 'folder', 'directory', 'create', 'delete', 'move', 'copy', 'rename', 'scan']):
-                agent_used = 'FileAgent'
-                if self.agents['file']:
-                    planning_response = self.agents['file'].router(query)
-                    if 'operations' in planning_response:
-                        response = self.agents['file'].operations(planning_response)
-                    else:
-                        response = planning_response
-                else:
-                    response = {"error": "FileAgent not available"}
-                    
-            elif any(keyword in query_lower for keyword in ['search web', 'internet', 'online', 'web search', 'google']):
-                agent_used = 'InternetAgent'
-                if self.agents['internet']:
-                    response = self.agents['internet'].search_web(query)
-                else:
-                    response = {"error": "InternetAgent not available"}
-                    
-            elif any(keyword in query_lower for keyword in ['document', 'rag', 'knowledge', 'search document', 'find in']):
-                agent_used = 'RAGAgent'  
-                if self.agents['rag']:
-                    router_response = self.agents['rag']._router(query)
-                    response = self.agents['rag']._operations(router_response)
-                else:
-                    response = {"error": "RAGAgent not available"}
-                    
+        else:
+            if response.get('response'):
+                formatted_output += f"{self.colors.SUCCESS}✅ Response:{self.colors.RESET}\n{response['response']}\n"
             else:
-                # Default to FileAgent for general requests
-                agent_used = 'FileAgent'
-                if self.agents['file']:
-                    planning_response = self.agents['file'].router(query)
-                    if 'operations' in planning_response:
-                        response = self.agents['file'].operations(planning_response)
-                    else:
-                        response = planning_response
-                else:
-                    response = {"error": "No suitable agent available"}
-                    
-            # Display response
-            if response:
-                formatted_response = self.format_agent_response(response, agent_used)
-                print(formatted_response)
-                
-                # Store in history
-                summary = "Success" if not any(key in str(response) for key in ['error', 'Error']) else "Error occurred"
-                self.conversation_history.append({
+                formatted_output += f"{self.colors.WARNING}⚠️ No final result provided, but operations may have run.{self.colors.RESET}\n"
+
+        # --- Update Histories and Display Operations ---
+        if operations:
+            formatted_output += f"\n{self.colors.INFO}⚙️ Operations Executed:{self.colors.RESET}\n"
+            for op in operations:
+                op_name = op.get("operation", "unknown_op")
+                op_result = op.get("result", {})
+                is_error = isinstance(op_result, dict) and "error" in op_result
+                status_icon = "❌" if is_error else "✅"
+
+                # Append to operation display string
+                result_str = op_result.get('error') or op_result.get('status') or "Completed"
+                formatted_output += f"  • {op_name}: {status_icon} {result_str}\n"
+
+                # Update the persistent operation history log
+                self.operation_history.append({
                     'timestamp': datetime.now(),
                     'query': query,
-                    'agent_used': agent_used,
-                    'response': response,
-                    'summary': summary
+                    'operation': op_name,
+                    'parameters': op.get("parameters"),
+                    'result': op_result,
+                    'success': not is_error
                 })
-            else:
-                print(f"{self.colors['error']}❌ No response received from agent.{self.colors['reset']}")
+
+        # Update the main conversation history
+        self.conversation_history.append({
+            'timestamp': datetime.now(),
+            'query': query,
+            'agent_used': agent_name,
+            'response': response,
+            'summary': "Success" if success else "Error or No Result"
+        })
+        
+        # Finally, print the entire formatted block
+        print(formatted_output)
+
+
+    def process_query(self, query: str):
+        """
+        Processes a user query:
+        1. Routes the query to the appropriate agent using the DecisionRouter.
+        2. Executes the agent's logic.
+        3. Hands the response to the display handler.
+        """
+        if not query.strip():
+            # if not self.router:
+            #     print(f"{self.colors.ERROR}❌ Decision Router is offline. Cannot process query.{self.colors.RESET}")
+            return
+
+        print(f"\n{self.colors.INFO}Routing request...{self.colors.RESET}")
+
+        try:
+            # 1. Use the router to determine the best agent
+            # The chat history is passed for context
+            # agent_key = self.router.route(query, chat_history.get_history())
+            agent_to_use = self.agents.get("file")
+            agent_name = agent_to_use.name if agent_to_use else "Unknown Agent"
+
+            # if not agent_to_use:
+            #     response = {"error": f"Router selected agent '{agent_key}', but it is not available."}
+            # else:
+            #     print(f"{self.colors.SUCCESS}→ Routed to {self.colors.AGENT}{agent_name}{self.colors.SUCCESS}. Executing...{self.colors.RESET}")
                 
+                # 2. Execute the selected agent's main entrypoint
+                # We assume a 'plan and execute' pattern for all agents for consistency
+                # The agent's internal 'router' creates a plan
+            plan = agent_to_use.router(query)
+                # The 'operations' method executes the plan
+            response = agent_to_use.operations(plan)
+
+            # 3. Process and display the agent's response
+            self._process_and_display_response(response, agent_name, query)
+
         except Exception as e:
-            print(f"{self.colors['error']}❌ Error processing query: {str(e)}{self.colors['reset']}")
-            
-    def _determine_agent_for_query(self, query: str) -> str:
-        """Determine which agent should handle the query (for demo purposes)."""
-        query_lower = query.lower()
-        if any(keyword in query_lower for keyword in ['file', 'folder', 'directory', 'create', 'delete', 'move', 'copy', 'rename', 'scan']):
-            return "FileAgent"
-        elif any(keyword in query_lower for keyword in ['search web', 'internet', 'online', 'web search', 'google']):
-            return "InternetAgent"
-        elif any(keyword in query_lower for keyword in ['document', 'rag', 'knowledge', 'search document', 'find in']):
-            return "RAGAgent"
-        else:
-            return "FileAgent (default)"
-            
-    def _mock_operations_for_query(self, query: str) -> str:
-        """Generate mock operations for demo purposes."""
-        query_lower = query.lower()
-        if 'scan' in query_lower:
-            return "Scan directory → List files → Format metadata"
-        elif 'create' in query_lower:
-            return "Validate path → Create file → Confirm creation"
-        elif 'search' in query_lower and 'web' in query_lower:
-            return "Parse query → Web search → Format results"
-        elif 'search' in query_lower:
-            return "Vectorize query → Search documents → Rank results"
-        else:
-            return "Parse request → Plan operations → Execute → Report results"
-            
+            print(f"{self.colors.ERROR}❌ An unexpected error occurred during query processing: {e}{self.colors.RESET}")
+            # Add a failure record to conversation history
+            self.conversation_history.append({
+                'timestamp': datetime.now(), 'query': query, 'agent_used': 'System',
+                'response': {'error': str(e)}, 'summary': 'Critical System Error'
+            })
+
     def run(self):
-        """Main demo loop."""
+        """Main demo loop to accept and process user input."""
         self.print_banner()
-        self.initialize_agents()
-        
-        print(f"{self.colors['success']}🚀 SCYTA is ready! Type your request or 'help' for examples.{self.colors['reset']}\n")
-        
+        self.initialize_system()
+
         while True:
             try:
-                # Get user input
-                prompt = f"{self.colors['user']}💬 You: {self.colors['reset']}"
+                prompt = f"{self.colors.USER}💬 You: {self.colors.RESET}"
                 user_input = input(prompt).strip()
-                
+
                 if not user_input:
                     continue
-                    
-                # Handle special commands
-                if user_input.lower() in ['exit', 'quit', 'bye']:
-                    print(f"\n{self.colors['success']}👋 Thank you for using SCYTA! Goodbye!{self.colors['reset']}")
-                    break
-                    
-                elif user_input.lower() == 'help':
-                    self.show_help()
-                    
-                elif user_input.lower() == 'history':
-                    self.show_history()
-                    
-                elif user_input.lower() == 'agents':
-                    self.show_agents_status()
-                    
-                elif user_input.lower() == 'clear':
-                    self.clear_history()
-                    
-                else:
-                    # Process the query
-                    self.process_query(user_input)
-                    
-            except KeyboardInterrupt:
-                print(f"\n\n{self.colors['warning']}⚠️  Interrupted by user. Type 'exit' to quit properly.{self.colors['reset']}")
-                continue
-                
-            except EOFError:
-                print(f"\n{self.colors['success']}👋 Session ended. Goodbye!{self.colors['reset']}")
-                break
-                
-            except Exception as e:
-                print(f"{self.colors['error']}❌ Unexpected error: {str(e)}{self.colors['reset']}")
-                continue
 
+                cmd = user_input.lower()
+                if cmd in ['exit', 'quit', 'bye']:
+                    print(f"\n{self.colors.SUCCESS}👋 Goodbye!{self.colors.RESET}")
+                    break
+                elif cmd == 'help':
+                    self.show_help()
+                elif cmd == 'history':
+                    self.show_history()
+                elif cmd == 'operations':
+                    self.show_operations()
+                elif cmd == 'agents':
+                    self.show_agents_status()
+                elif cmd == 'clear':
+                    self.clear_history()
+                else:
+                    self.process_query(user_input)
+
+            except KeyboardInterrupt:
+                print(f"\n{self.colors.WARNING}Caught interrupt. Exiting...{self.colors.RESET}")
+                break
+            except Exception as e:
+                print(f"\n{self.colors.ERROR}A fatal error occurred in the main loop: {e}{self.colors.RESET}")
+                break
 
 def main():
-    """Entry point for the demo."""
+    """Entry point for the SCYTA demo application."""
     try:
         demo = ScytaDemo()
         demo.run()
     except Exception as e:
-        print(f"Failed to start SCYTA demo: {e}")
+        print(f"{Colors.ERROR}Failed to start SCYTA demo: {e}{Colors.RESET}")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

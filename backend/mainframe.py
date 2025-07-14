@@ -2,8 +2,12 @@ from llama_cpp import Llama
 import os
 import subprocess
 from abc import ABC, abstractmethod
-from groq import Groq
+from cerebras.cloud.sdk import Cerebras
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+from google.genai.types import Tool, FunctionDeclaration
+from google.genai.types import GenerateContentConfig
 
 load_dotenv()
 
@@ -28,8 +32,6 @@ class BaseAgent(ABC):
     def __init__(self, name, description):
         self.name = name
         self.description = description
-        self.llm = Groq(
-            api_key=os.getenv("GROQ_API")
-        )
+        self.llm = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         self.memory = [] # Stores the previous querieres and responses
         self.tools = [Tool(name="Calculator", func=calculator, description="Useful for math calculations")]

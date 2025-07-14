@@ -2,12 +2,11 @@ from llama_cpp import Llama
 import os
 import concurrent.futures 
 from pathlib import Path
-from typing import List, Dict
 from backend.mainframe import BaseAgent, Tool
 import hashlib
 import mimetypes
 import json
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 import shutil
 from backend.chathistory import chat_history
 from backend.schemas.operation_schemas import FILEAGENT_SCHEMA
@@ -30,7 +29,7 @@ class FileAgent(BaseAgent):
         self.metadata_cache = {}
         
         # Initialize current directory tracking
-        self.current_directory = Path("~/Documents").expanduser()
+        self.current_directory = Path("~/TestingFolder").expanduser()
         
         # Define allowed directories with their access levels
         self.allowed_directories = {
@@ -38,7 +37,8 @@ class FileAgent(BaseAgent):
             "~/Documents": {"read": True, "write": True, "delete": True},
             "~/Pictures": {"read": True, "write": False, "delete": False},
             "~/Music": {"read": True, "write": False, "delete": False},
-            "~/Movies": {"read": True, "write": True, "delete": False}
+            "~/Movies": {"read": True, "write": True, "delete": False},
+            "~/TestingFolder": {"read": True, "write": True, "delete": True}
         }
         
         # Initialize other attributes
@@ -54,6 +54,36 @@ class FileAgent(BaseAgent):
             if isinstance(function_name, str):
                 self.fileagent_operations[operation]["function"] = getattr(self, function_name)
                 
+    def _resolve_file_path(self, file_path: str) -> Path:
+        """
+        Intelligently resolve a file path by searching in allowed directories if not found
+        """
+        # First try the path as provided
+        path_obj = Path(file_path).expanduser()
+        
+        # If the file doesn't exist and it's a relative path, try to find it in allowed directories
+        if not path_obj.exists() and not path_obj.is_absolute():
+            # Try to find the file in allowed directories
+            for allowed_dir in self.allowed_directories.keys():
+                allowed_path = Path(allowed_dir).expanduser()
+                potential_path = allowed_path / path_obj.name
+                if potential_path.exists():
+                    return potential_path
+        
+        return path_obj
+    
+    def _resolve_destination_path(self, destination_path: str, source_path: Path) -> Path:
+        """
+        Resolve destination path, using source path's parent directory if destination is relative
+        """
+        destination_obj = Path(destination_path).expanduser()
+        
+        # If destination is relative and not absolute, resolve it against the source's parent directory
+        if not destination_obj.is_absolute():
+            destination_obj = source_path.parent / destination_obj
+            
+        return destination_obj
+        
     def _check_permission(self, path: Path, operation: str) -> bool:
         try:
             # Expand and resolve the path
@@ -102,43 +132,43 @@ class FileAgent(BaseAgent):
         # Get recent conversation context
         recent_context = chat_history.get_recent_conversations(limit=3)
         
-        # prompt_planning = PROMPT_PLANNING.format(
-        #     recent_context=recent_context,
-        #     instruction=instruction,
-        #     fileagent_operations=self.fileagent_operations,
-        #     planning_examples=PLANNING_EXAMPLES,
-        #     current_directory=self.get_current_directory()
-        # )
+        prompt_planning = PROMPT_PLANNING.format(
+            recent_context=recent_context,
+            instruction=instruction,
+            fileagent_operations=self.fileagent_operations,
+            planning_examples=PLANNING_EXAMPLES,
+            current_directory=self.get_current_directory()
+        )
         
-        # plan_output = self.llm.chat.completions.create(
-        #     messages=[
-        #         {"role": "user", "content": prompt_planning}
-        #     ],
-        #     model="llama-3.1-8b-instant",
-        #     temperature=0.2,
-        #     max_tokens=4000,
-        # )
-        # plan_response = plan_output.choices[0].message.content
-        # # print(plan_response)
-        # planning_json_response = self._extract_json(plan_response)
+        plan_output = self.llm.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt_planning,
+            # config={
+            # "temperature": 0.2,
+            # "max_output_tokens": 4000,
+            # }
+        )
+        plan_response = plan_output.text
+        print(plan_response)
+        planning_json_response = self._extract_json(plan_response)
         
         prompt_operation = PROMPT_OPERATION.format(
             fileagent_operations=self.fileagent_operations,
-            # planning_json_response=planning_json_response,
+            planning_json_response=planning_json_response,
             instruction=instruction,
             operation_examples=OPERATION_EXAMPLES,
             current_directory=self.get_current_directory()
         ) 
        
-        operation_output = self.llm.chat.completions.create(
-            messages=[
-                {"role": "user", "content": prompt_operation}
-            ],
-            model="llama-3.1-8b-instant",
-            temperature=0.2,
-            max_tokens=4000,
+        operation_output = self.llm.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt_operation,
+            # config={
+            # "temperature": 0.2,
+            # "max_output_tokens": 4000,
+            # }
         )
-        operation_response = operation_output.choices[0].message.content
+        operation_response = operation_output.text
         operation_json_response = self._extract_json(operation_response)
         chat_history.add_operation(operation_json_response)
         chat_history.add_conversation(instruction, operation_json_response, planning_json_response)
@@ -155,10 +185,11 @@ class FileAgent(BaseAgent):
             operations = json.get("operations", [])
             operation_intermediate_results = [] # Used to store results passed on to next operation
             operation_results = [] # Used to store all results for final processing
+            executed_operations = [] # Track what operations were actually executed
             
             for operation in operations:
                 
-                print("Performing operation: \n", operation)
+                # print("Performing operation: \n", operation)
                 operation_type = operation.get("operation")
                 post_processing = operation.get("post_processing", "")
                 next_operation = operation.get("next_operation", "")
@@ -166,7 +197,7 @@ class FileAgent(BaseAgent):
             
                 if operation_type not in self.fileagent_operations:
                     return {"error": "Invalid operation"}
-                print("Operation intermediate results: ", operation_intermediate_results)
+                # print("Operation intermediate results: ", operation_intermediate_results)
                 
                 # Execute the operation
                 # Check if any parameter needs to be populated from previous operation results
@@ -191,6 +222,15 @@ class FileAgent(BaseAgent):
                 
                 print("Executing operation: ", operation_type)
                 returnval = self.fileagent_operations[operation_type]["function"](**kwargs)
+                # print("Returnval: ", returnval)
+                
+                # Track the executed operation
+                executed_operations.append({
+                    "operation": operation_type,
+                    "parameters": kwargs,
+                    "result": returnval,
+                    "timestamp": datetime.now().isoformat()
+                })
 
                 # Append the result to the list of results
                 operation_results.append(returnval)
@@ -200,10 +240,21 @@ class FileAgent(BaseAgent):
                     batch_size = 6
                     operation_intermediate_results.append(self._batch_process(returnval, next_operation, post_processing, batch_size))
                     
-            # print("Operation results: ", operation_results)
-            return operation_results
+            # Return structured response with operation tracking
+            final_result = {}
+            if operation_intermediate_results:
+                final_result = operation_intermediate_results[-1].get("return_val", {})
+            return {
+                "response": final_result,
+                "operations_executed": executed_operations,
+                "results": operation_results,
+                "total_operations": len(executed_operations),
+                "success": all("error" not in str(result) for result in operation_results)
+            }
         
         except Exception as e:
+            import traceback
+            print(f"Operations method failed at line {traceback.extract_tb(e.__traceback__)[-1].lineno}: {e}")
             return {"error": str(e)}
             
     def _batch_process(self, returnval: List[Dict], next_operation, post_processing, batch_size=10) -> Dict:
@@ -276,21 +327,21 @@ class FileAgent(BaseAgent):
     def _batch_process_single(self, batch_data: List[Dict], next_operation, next_operation_schema, post_processing) -> Dict:
         
         try:
-            print("Next operation: ", next_operation)
-            print("Performing post-processing")
+            # print("Next operation: ", next_operation)
+            # print("Performing post-processing")
             
             post_processing_prompt = POST_PROCESSING_PROMPT.format(next_operation=next_operation, next_operation_schema=next_operation_schema, post_processing=post_processing, batch_data=batch_data)
             
-            process_output = self.llm.chat.completions.create(
-                messages=[
-                    {"role": "user", "content": post_processing_prompt}
-                ],
-                model="llama-3.1-8b-instant",
-                temperature=0.1,
-                max_tokens=4000,
-            )
+            process_output = self.llm.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=post_processing_prompt,
+            #     config={
+            #     "temperature": 0.2,
+            #     "max_output_tokens": 4000,
+            # }
+        )
             
-            process_response = process_output.choices[0].message.content
+            process_response = process_output.text
             print("Post-processing response: ", process_response)
             process_json_response = self._extract_json(process_response)
             returnval = process_json_response.get("output", {})
@@ -384,7 +435,8 @@ class FileAgent(BaseAgent):
                 "type": "",
                 "metadatas": [],
                 "total_files": 0,
-                "total_size": 0
+                "total_size": 0,
+                "formatted_file_list": ""
             }
 
             if not expanded_path.exists():
@@ -427,6 +479,11 @@ class FileAgent(BaseAgent):
                 
             else:
                 return {"error": "Invalid path"}
+            
+            # Add formatted file list to results
+            if results["metadatas"]:
+                results["formatted_file_list"] = self._format_metadata_list(results["metadatas"])
+            
             return results
 
         except Exception as e:
@@ -502,6 +559,38 @@ class FileAgent(BaseAgent):
         for i, file in enumerate(source_path, 1):
             formatted += f"{i}. {file}\n"
         return formatted
+    
+    def _format_metadata_list(self, metadatas: List[Dict], max_display: int = 30) -> str:
+        """
+        Format a list of metadata objects to show file names and key info
+        """
+        if not metadatas:
+            return "No files found"
+        
+        formatted = f"\n📁 Files Found ({len(metadatas)} total):\n"
+        formatted += "─" * 50 + "\n"
+        
+        # Show first max_display files with details
+        for i, metadata in enumerate(metadatas[:max_display], 1):
+            file_path = Path(metadata.get('file_path', ''))
+            file_name = file_path.name
+            file_size = metadata.get('size_formatted', 'Unknown size')
+            file_type = metadata.get('type', 'unknown')
+            
+            formatted += f"{i:2d}. 📄 {file_name}\n"
+            formatted += f"     📂 Path: {file_path}\n"
+            formatted += f"     📊 Size: {file_size}\n"
+            formatted += f"     🏷️  Type: {file_type}\n"
+            
+            if i < len(metadatas[:max_display]):
+                formatted += "\n"
+        
+        # If there are more files, show a summary
+        if len(metadatas) > max_display:
+            remaining = len(metadatas) - max_display
+            formatted += f"\n... and {remaining} more files\n"
+        
+        return formatted
 
     def _delete_file(self, source_path: Union[str, List[str]]) -> Dict:
         try:
@@ -536,7 +625,10 @@ class FileAgent(BaseAgent):
                 if not self._confirm_operation("delete", [str(path)]):
                     return {"message": "Operation cancelled by user"}
                 shutil.move(path, trash_path / path.name)
-                return {"message": "File moved to trash successfully", "formatted_output": f"Deleted: {path}"}
+                return {
+                    "message": f"File moved to trash successfully: {path.name}",
+                    "formatted_output": f"🗑️ Deleted: {path.name}\n     Path: {path}\n     Location: Trash"
+                }
         except Exception as e:
             return {"error": str(e)}
         
@@ -554,20 +646,27 @@ class FileAgent(BaseAgent):
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     results = executor.map(lambda paths: self._rename_file_single(*paths), zip(source_path, destination_path))
                     return {"results": list(results), "formatted_output": self._format_file_list(source_path)}
+            
+            # For single file operations, also ask for confirmation
+            if not self._confirm_operation("rename", [source_path]):
+                return {"message": "Operation cancelled by user"}
             return self._rename_file_single(source_path, destination_path)
         except Exception as e:
             return {"error": str(e)}
         
     def _rename_file_single(self, source_path: str, destination_path: str) -> Dict:
         try:
-            source_path = Path(source_path).expanduser()
-            destination_path = Path(destination_path).expanduser()
+            source_path_obj = self._resolve_file_path(source_path)
+            destination_path_obj = self._resolve_destination_path(destination_path, source_path_obj)
             
-            if not source_path.exists():
-                return {"error": "File does not exist"}
+            if not source_path_obj.exists():
+                return {"error": f"File does not exist: {source_path_obj}"}
             
-            source_path.rename(destination_path)
-            return {"message": "File renamed successfully"}
+            source_path_obj.rename(destination_path_obj)
+            return {
+                "message": f"File renamed successfully: {source_path_obj.name} → {destination_path_obj.name}",
+                "formatted_output": f"✏️ Renamed: {source_path_obj.name} → {destination_path_obj.name}\n     Path: {destination_path_obj}"
+            }
         except Exception as e:
             return {"error": str(e)}
         
@@ -580,11 +679,11 @@ class FileAgent(BaseAgent):
                     return json.loads(match.group(1))
 
             # Try parsing JSON between brackets
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            if not match:
+            first_brace_index = text.find('{')
+            if first_brace_index == -1:
                 raise ValueError("No JSON found")
-                
-            json_str = match.group().strip()
+
+            json_str = text[first_brace_index:].strip()
             
             # Add missing closing brace if needed
             if json_str.count('{') > json_str.count('}'):
@@ -595,13 +694,14 @@ class FileAgent(BaseAgent):
             except json.JSONDecodeError:
                 # Clean up common JSON formatting issues
                 # Remove trailing commas before closing braces/brackets
-                json_str = re.sub(r',\s*[}\]]', r'\1', json_str)
+                json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
                 # Add missing commas between fields
                 json_str = re.sub(r'"\s*}\s*"', '", "', json_str)
                 json_str = re.sub(r'"\s*}\s*}', '"}', json_str)
                 return json.loads(json_str)
                 
         except Exception as e:
+            print(f"Error extracting JSON: {e}")
             return {"error": str(e)}
     
     def _move_file(self, source_path: Union[str, List[str]], destination_path: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
@@ -616,6 +716,7 @@ class FileAgent(BaseAgent):
             else:
                 if not self._validate_operation("move", source_path):
                     return {"error": f"Permission denied: No write access to {source_path}"}
+                
                 if not self._validate_operation("move", destination_path):
                     return {"error": f"Permission denied: No write access to {destination_path}"}
                     
@@ -655,14 +756,17 @@ class FileAgent(BaseAgent):
         
     def _move_file_single(self, source_path: str, destination_path: str) -> Dict:
         try:
-            source_path = Path(source_path).expanduser()
-            destination_path = Path(destination_path).expanduser()
+            source_path_obj = self._resolve_file_path(source_path)
+            destination_path_obj = self._resolve_destination_path(destination_path, source_path_obj)
             
-            if not source_path.exists():
-                return {"error": "File does not exist"}
+            if not source_path_obj.exists():
+                return {"error": f"File does not exist: {source_path_obj}"}
             
-            shutil.move(source_path, destination_path)
-            return {"message": "File moved successfully"}
+            shutil.move(source_path_obj, destination_path_obj)
+            return {
+                "message": f"File moved successfully: {source_path_obj.name} → {destination_path_obj}",
+                "formatted_output": f"📦 Moved: {source_path_obj.name}\n     From: {source_path_obj}\n     To: {destination_path_obj}"
+            }
         except Exception as e:
             return {"error": str(e)}
         
@@ -700,29 +804,50 @@ class FileAgent(BaseAgent):
         
     def _copy_single_file(self, source_path: str, destination_path: str) -> Dict:
         try:
-            source_path = Path(source_path).expanduser()
-            destination_path = Path(destination_path).expanduser()
+            source_path_obj = self._resolve_file_path(source_path)
+            destination_path_obj = self._resolve_destination_path(destination_path, source_path_obj)
             
-            if not os.path.exists(source_path):
-                return {"error": "File does not exist"}
-            shutil.copy(source_path, destination_path)
+            if not source_path_obj.exists():
+                return {"error": f"File does not exist: {source_path_obj}"}
             
-            return {"message": "File copied successfully"}
+            shutil.copy(source_path_obj, destination_path_obj)
+            
+            return {
+                "message": f"File copied successfully: {source_path_obj.name} → {destination_path_obj}",
+                "formatted_output": f"📋 Copied: {source_path_obj.name}\n     From: {source_path_obj}\n     To: {destination_path_obj}"
+            }
         except Exception as e:
             return {"error": str(e)}
         
-    def _create_file(self, source_path: str, content: str) -> Dict:
+    def _create_file(self, source_path: str, content: Any) -> Dict:
         try:
-            # Check permissions for create operation
             if not self._validate_operation("create_file", source_path):
                 return {"error": f"Permission denied: No write access to {source_path}"}
-                
-            file_path = Path(source_path).expanduser()
             
+            file_path = Path(source_path).expanduser()
+
+            # 🔽 Handle formatting of various content types
+            if isinstance(content, list):
+                flattened = []
+                for item in content:
+                    if isinstance(item, str):
+                        flattened.extend(item.splitlines())
+                    else:
+                        flattened.append(str(item))
+                content_str = "\n".join(flattened)
+            elif isinstance(content, (dict, set, tuple)):
+                content_str = "\n".join(str(item) for item in content)
+            else:
+                content_str = str(content)
+
             with open(file_path, "w") as file:
-                file.write(content)
-            return {"message": "File created successfully"}
-        
+                file.write(content_str)
+
+            return {
+                "message": f"File created successfully: {file_path.name}",
+                "formatted_output": f"📄 Created: {file_path.name}\n     Path: {file_path}\n     Content length: {len(content_str)} characters"
+            }
+
         except Exception as e:
             return {"error": str(e)}
         
@@ -738,7 +863,10 @@ class FileAgent(BaseAgent):
             true_path = Path(source_path).expanduser()
             
             true_path.mkdir(parents=True, exist_ok=True)
-            return {"message": "Directory created successfully"}
+            return {
+                "message": f"Directory created successfully: {true_path.name}",
+                "formatted_output": f"📁 Created: {true_path.name}\n     Path: {true_path}"
+            }
         
         except Exception as e:
             return {"error": str(e)}
@@ -922,6 +1050,6 @@ if __name__ == "__main__":
     agent = FileAgent(name="File Agent", description="Handles file operations")
     while True:
         instruction = input("Enter instruction: ")
-        agent.operations(agent.router(instruction))
+        print(agent.operations(agent.router(instruction)))
 
 

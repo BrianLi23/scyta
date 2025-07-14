@@ -12,11 +12,12 @@ import sys
 import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
+from backend.demo import main as demo_main
 
 def check_dependencies():
     """Check if required dependencies are installed."""
     required_packages = [
-        'groq',
+        'cerebras',
         'pathlib', 
         'typing',
         'json',
@@ -39,7 +40,7 @@ def check_dependencies():
 
 def check_environment():
     """Check if environment variables are set."""
-    required_env = ['GROQ_API']
+    required_env = ['CEREBRAS_API_KEY']
     missing = []
     
     for env_var in required_env:
@@ -74,23 +75,15 @@ def main():
     # Check environment
     print("🔍 Checking environment...")
     if not check_environment():
-        print("💡 Tip: Create a .env file with your GROQ_API key")
+        print("💡 Tip: Create a .env file with your CEREBRAS_API_KEY")
         sys.exit(1)
     
     print("✅ All checks passed!")
     print("🎯 Starting SCYTA demo...\n")
     
     # Import and run the demo
-    try:
-        from demo import main as demo_main
-        demo_main()
-    except ImportError as e:
-        print(f"❌ Failed to import demo: {e}")
-        print("Please ensure you're in the correct directory and all files are present.")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Failed to start demo: {e}")
-        sys.exit(1)
+    demo_main()
+
 
 if __name__ == "__main__":
     main()

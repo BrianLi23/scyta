@@ -64,9 +64,9 @@ class RAGAgentTools:
                 
                 reasoning_response = self.llm.chat.completions.create(
                     messages=[{"role": "user", "content": reasoning_prompt}],
-                    model="llama3-70b-8192",
+                    model="llama-4-scout-17b-16e-instruct",
                     temperature=0.2,
-                    max_tokens=100,
+                    max_completion_tokens=100,
                 )
                 
                 reasoning_response = reasoning_response.choices[0].message.content

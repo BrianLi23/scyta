@@ -1,15 +1,14 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      
-      {
-        "name": "Debug RAGAgent",
-        "type": "debugpy",
-        "request": "launch",
-        "module": "backend.agents.ragagent",
-        "console": "integratedTerminal",
-        "cwd": "${workspaceFolder}"
-      }
-    ]
-  }
-  
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug RAGAgent",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "backend.agents.fileagent",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "/Users/brianli/Projects/scyta-1/.venv/bin/python"
+    }
+  ]
+}
