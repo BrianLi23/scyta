@@ -5,7 +5,11 @@ Scyta is a multi-agent file-system agent that leverages chain-of-thought reasoni
 **Initial Demo (Terminal Based UI)**
 
 
-https://github.com/user-attachments/assets/604bb42d-83d2-47bb-8b3d-9c9a248e9292
+
+https://github.com/user-attachments/assets/a76f6cfb-46d0-4463-a8c3-17a7e1b15764
+
+
+
 
 
 ## Multi-Agent Architecture
@@ -22,11 +26,7 @@ https://github.com/user-attachments/assets/604bb42d-83d2-47bb-8b3d-9c9a248e9292
   - Permission-aware file operations
   - Automatic metadata extraction and indexing
   - Secure file handling with proper access controls
-- **Context-Aware Processing**:
-  - Maintains conversation history for better context
-  - Understands user intent through natural language
-  - Provides detailed operation planning and execution
-
+    
 ### RAG Agent
 - **FAISS Indexing**: Efficient vector storage and retrieval
 - **Cohere Integration**: Fine-tuned LLM for better understanding and response generation
@@ -37,24 +37,6 @@ https://github.com/user-attachments/assets/604bb42d-83d2-47bb-8b3d-9c9a248e9292
   - Intelligent web scraping and data extraction
   - Context-aware search across multiple sources
   - Automatic summarization of findings
-- **Search Capabilities**:
-  - Multi-source search engine integration
-  - Real-time information gathering
-  - Semantic search understanding
-
-### External Integrations (Coming Soon)
-- Google Drive integration
-- Gmail access
-- Spotify connectivity
-- More integrations in development
-
-### Key Technologies
-
-- **Python**: Core programming language
-- **FAISS**: Vector similarity search
-- **Cohere**: LLM integration
-- **Pathlib**: File system operations
-- **Concurrent Processing**: Parallel task execution
 
 ## 🛠️ Installation
 
