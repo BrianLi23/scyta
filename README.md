@@ -1,4 +1,7 @@
-# Scyta - Intelligent Multi-Agent File Processing System
+# Scyta
+
+<img width="1702" height="950" alt="Scyta" src="https://github.com/user-attachments/assets/8762e550-1016-410d-9c07-2a92be3250d8" />
+
 
 Scyta is a multi-agent file-system agent that leverages chain-of-thought reasoning and specialized agents to provide intelligent file processing and information retrieval capabilities. The system combines file management, RAG (Retrieval-Augmented Generation), and external service integrations to deliver a comprehensive solution for personal file management and information access.
 
