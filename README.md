@@ -2,18 +2,19 @@
 
 Scyta is a multi-agent file-system agent that leverages chain-of-thought reasoning and specialized agents to provide intelligent file processing and information retrieval capabilities. The system combines file management, RAG (Retrieval-Augmented Generation), and external service integrations to deliver a comprehensive solution for personal file management and information access.
 
-## 🚀 Key Features
+**Initial Demo (Terminal Based UI)**
 
-### Multi-Agent Architecture
+
+https://github.com/user-attachments/assets/604bb42d-83d2-47bb-8b3d-9c9a248e9292
+
+
+## Multi-Agent Architecture
 - **Specialized Agents**: Each agent is designed for specific tasks (file operations, RAG, internet access)
 - **Chain-of-Thought Processing**: Agents use structured reasoning to break down complex tasks
 - **Concurrent Processing**: Multiple agents can work simultaneously on different aspects of a task
 - **Dynamic Learning**: Agents improve their performance through interaction history and feedback
-- **Multiprocessing Framework (In Progress)**: ...
-
-## 🏗️ Architecture
-
-### Core Components
+  
+## Core Components
 
 ### File Agent
 - **Intelligent File Operations**: 
@@ -60,13 +61,6 @@ Scyta is a multi-agent file-system agent that leverages chain-of-thought reasoni
 ```bash
 # Coming Soon...
 ```
-
-## 🔒 Security
-
-- Permission-based access control
-- Secure file operations
-- Protected API integrations
-- Safe external service connections
 
 ## 🚧 Roadmap
 
