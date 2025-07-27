@@ -1,59 +1,53 @@
+<div align="center">
+
 # Scyta
 
-<img width="1702" height="950" alt="Scyta" src="https://github.com/user-attachments/assets/8762e550-1016-410d-9c07-2a92be3250d8" />
+**An intelligent multi-agent system for advanced file management and information retrieval**
 
-----
-Scyta is a multi-agent file-system agent that provide intelligent file processing and information retrieval capabilities. The system combines file management, RAG (Retrieval-Augmented Generation), and external service integrations to deliver a comprehensive solution for personal file management and information access.
+[![Status](https://img.shields.io/badge/status-In%20Development-orange.svg?style=for-the-badge)](#-roadmap)
 
-\**\* For context: this project was done before coding agents were cool
+</div>
 
-**Initial Demo (Terminal Based UI)**
+## 🔍 About
 
+Scyta is a multi-agent file-system agent that provides intelligent file processing and information retrieval capabilities. It's designed to be a comprehensive solution for personal file management and information access, using a team of specialized AI agents to handle complex tasks.
 
+***For context: this project was done before coding agents were cool.**
+
+<br/>
+
+<p align="center">
+  <img width="100%" alt="Scyta UI" src="https://github.com/user-attachments/assets/8762e550-1016-410d-9c07-2a92be3250d8" />
+</p>
+
+### Early-Stage Demo
 
 https://github.com/user-attachments/assets/a76f6cfb-46d0-4463-a8c3-17a7e1b15764
 
+## Features
 
+- **Multi-Agent System**: Utilizes specialized agents that work concurrently to break down and solve complex requests.
+- **Intelligent File Operations**: Automates file organization, metadata extraction, and operations for secure and efficient management.
+- **Dynamic Learning**: Designed for agents to improve their performance over time based on interaction history and user feedback.
 
+## Architecture
 
+Scyta's power comes from its multi-agent architecture, where complex user prompts are delegated to a team of specialized agents. Each agent has a distinct role and can operate concurrently, collaborating to deliver a comprehensive result.
 
-## Multi-Agent Architecture
-- **Specialized Agents**: Each agent is designed for specific tasks (file operations, RAG, internet access)
-- **Chain-of-Thought Processing**: Agents use structured reasoning to break down complex tasks
-- **Concurrent Processing**: Multiple agents can work simultaneously on different aspects of a task
-- **Dynamic Learning**: Agents improve their performance through interaction history and feedback
-  
-## Core Components
+- **Specialized Agents**: Each agent is an expert in a specific domain (e.g., file operations, information retrieval, web browsing).
+- **Concurrent Processing**: Multiple agents can work in parallel, drastically speeding up tasks that involve different domains (e.g., searching the web while organizing local files).
+- **Tool-Augmented Reasoning**: Agents are equipped with specific tools to perform their tasks reliably and efficiently.
 
-### File Agent
-- **Intelligent File Operations**: 
-  - Smart file organization and categorization
-  - Permission-aware file operations
-  - Automatic metadata extraction and indexing
-  - Secure file handling with proper access controls
-    
-### RAG Agent
-- **FAISS Indexing**: Efficient vector storage and retrieval
-- **Cohere Integration**: Fine-tuned LLM for better understanding and response generation
-- **Tool-Augmented Retrieval (Coming Soon)**: Enhanced search capabilities across multiple data sources
+### Core Agents
 
-### Internet Agent
-- **Autonomous Web Research**:
-  - Intelligent web scraping and data extraction
-  - Context-aware search across multiple sources
-  - Automatic summarization of findings
+| Agent | Description | Key Functions |
+| :--- | :--- | :--- |
+| **File Agent** | Manages all interactions with the local file system. | Smart organization, permission-aware R/W/X, metadata extraction, secure file handling. |
+| **RAG Agent** | Handles information retrieval from indexed documents. | FAISS vector indexing, Cohere-powered response generation, context-aware retrieval. |
+| **Internet Agent** | Performs autonomous research and data gathering from the web. | Intelligent scraping, multi-source search, automatic summarization. |
 
+---
 ## 🛠️ Installation
 
 ```bash
 # Coming Soon...
-```
-
-## 🚧 Roadmap
-
-- [ ] Enhanced external service integrations
-- [ ] Improved RAG capabilities
-- [ ] Advanced file analysis features
-- [ ] User interface development
-- [ ] Additional agent specializations
-
